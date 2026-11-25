@@ -52,6 +52,13 @@ npm run dev
 
 ## פריסה ל-GitHub Pages
 
+**הפריסה הנוכחית:**
+- repository: https://github.com/taldrb-git/TaskManajer
+- כתובת האפליקציה: https://taldrb-git.github.io/TaskManajer/
+- כל push ל-`main` מעדכן את האתר תוך כ-2 דקות. האפליקציה המותקנת בטלפון מתעדכנת בפתיחה הבאה.
+
+הצעדים להקמה מאפס:
+
 1. יוצרים repository ב-GitHub (למשל `task-manager`) ומעלים את הקוד:
    ```bash
    git init && git add . && git commit -m "Initial commit"
