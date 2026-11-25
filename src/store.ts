@@ -60,6 +60,8 @@ function normalizeNote(n: Note): Note {
     source: n.source ?? '',
     tracking: n.tracking ?? '',
     date: n.date ?? null,
+    time: n.time ?? null,
+    task_id: n.task_id ?? null,
     notes: n.notes ?? '',
   }
 }
@@ -237,6 +239,15 @@ export function updateTask(id: string, patch: Partial<Omit<Task, 'id' | 'created
   const t = data.tasks[id]
   if (!t) return
   commit('tasks', { ...t, ...patch, updated_at: now() })
+  // משימה של תור (שיער / ריסים): שינוי תאריך או שעה בלוח השנה מעדכן גם את התור
+  if (('due' in patch || 'time' in patch) && !patch.deleted) {
+    const n = Object.values(data.notes).find((x) => x.task_id === id && !x.deleted)
+    if (n && patch.due !== null) {
+      const date = patch.due ?? n.date
+      const time = 'time' in patch ? (patch.time ?? null) : n.time
+      if (date !== n.date || time !== n.time) commit('notes', { ...n, date, time, updated_at: now() })
+    }
+  }
 }
 
 /**
@@ -362,6 +373,33 @@ export function duplicateTask(id: string, count: number, opts: { everyDays: numb
 
 // ---------- פתקים ----------
 
+const APPOINTMENT_BOARDS: NoteBoard[] = ['hair', 'lashes']
+
+/**
+ * תור (שיער / ריסים) עם תאריך עתידי מקבל משימה בלוח השנה: "תור גוונים".
+ * שינוי בתור מעדכן את המשימה. מחיקת התור (או הסרת התאריך) מוחקת אותה, ושחזור מחזיר אותה.
+ * תור שכבר עבר לא יוצר משימה חדשה, אבל משימה קיימת נשארת ביום שלה (גם בגלגול בחצות).
+ */
+function syncAppointment(id: string) {
+  const n = data.notes[id]
+  if (!n || !APPOINTMENT_BOARDS.includes(n.board)) return
+  const task = n.task_id ? data.tasks[n.task_id] : undefined
+  const alive = task && task.deleted_at !== PURGED
+  if (n.deleted || !n.date || !n.title.trim()) {
+    if (task && !task.deleted && !task.done) commit('tasks', { ...task, deleted: true, deleted_at: now(), updated_at: now() })
+    return
+  }
+  const fields = { title: `תור ${n.title.trim()}`, due: n.date, time: n.time, notes: n.notes }
+  if (alive) {
+    const changed = task.deleted || task.title !== fields.title || task.due !== fields.due || task.time !== fields.time || task.notes !== fields.notes
+    if (changed) commit('tasks', { ...task, ...fields, deleted: false, deleted_at: null, updated_at: now() })
+  } else if (n.date >= today()) {
+    const t = addTask({ title: fields.title, due: fields.due, time: fields.time })
+    if (fields.notes) commit('tasks', { ...data.tasks[t.id], notes: fields.notes, updated_at: now() })
+    commit('notes', { ...data.notes[id], task_id: t.id, updated_at: now() })
+  }
+}
+
 export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'board' | 'created_at' | 'updated_at' | 'deleted'>>): Note {
   const n: Note = normalizeNote({
     id: uid(),
@@ -372,19 +410,23 @@ export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'boa
     source: fields.source ?? '',
     tracking: fields.tracking ?? '',
     date: fields.date ?? null,
+    time: fields.time ?? null,
+    task_id: null,
     notes: fields.notes ?? '',
     created_at: now(),
     updated_at: now(),
     deleted: false,
   })
   commit('notes', n)
-  return n
+  syncAppointment(n.id)
+  return data.notes[n.id]
 }
 
 export function updateNote(id: string, patch: Partial<Omit<Note, 'id' | 'board' | 'created_at'>>) {
   const n = data.notes[id]
   if (!n) return
   commit('notes', { ...n, ...patch, updated_at: now() })
+  syncAppointment(id)
 }
 
 export function deleteNote(id: string) {
@@ -443,8 +485,10 @@ let lastDay = today()
 export function rollover() {
   const t = today()
   let changed = false
+  // משימות של תורים נשארות ביום שלהן – התור קרה (או לא) באותו יום
+  const appointments = new Set(Object.values(data.notes).map((n) => n.task_id).filter(Boolean))
   for (const task of Object.values(data.tasks)) {
-    if (task.done || task.deleted || !task.due || task.due >= t) continue
+    if (task.done || task.deleted || !task.due || task.due >= t || appointments.has(task.id)) continue
     data.tasks[task.id] = { ...task, due: t, postponed: (task.postponed ?? 0) + diffDays(task.due, t), updated_at: now() }
     if (!data.dirty.tasks.includes(task.id)) data.dirty.tasks.push(task.id)
     changed = true
@@ -475,7 +519,7 @@ const COLUMNS: Record<Table, string[]> = {
     'time', 'remind', 'repeat', 'subtasks', 'created_at', 'updated_at', 'deleted', 'deleted_at',
   ],
   lists: ['id', 'name', 'color', 'created_at', 'updated_at', 'deleted'],
-  notes: ['id', 'board', 'title', 'status', 'amount', 'source', 'tracking', 'date', 'notes', 'created_at', 'updated_at', 'deleted'],
+  notes: ['id', 'board', 'title', 'status', 'amount', 'source', 'tracking', 'date', 'time', 'task_id', 'notes', 'created_at', 'updated_at', 'deleted'],
 }
 
 function pick(row: Record<string, unknown>, table: Table): Row {

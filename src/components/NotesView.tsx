@@ -1,16 +1,17 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { today } from '../dates'
-import { ChevronIcon, CopyIcon, TrashIcon } from '../icons'
-import { BOARDS, TREATMENT_TYPES, agoLabel, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, waitingLabel, type TreatmentBoard } from '../notes'
+import { fullDateLabel, today } from '../dates'
+import { CalendarIcon, ChevronIcon, CopyIcon, TrashIcon } from '../icons'
+import { BOARDS, TREATMENT_TYPES, agoLabel, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
 import { addNote, deleteNote, updateNote } from '../store'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
+import { useSwipeDelete } from './useSwipeDelete'
 
 // ---------- מסך הלוחות ----------
 
 /** כרטיס לכל לוח, עם שורת סיכום קצרה */
 export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note[]; onOpen: (b: Board) => void }) {
-  const summary = (b: Board): string => {
+  const summary = (b: Board): string | { hot: string } => {
     if (b === 'someday') {
       const n = tasks.filter((t) => !t.done && !t.due).length
       return n === 1 ? 'רעיון אחד' : n ? `${n} רעיונות` : 'ריק'
@@ -28,6 +29,8 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
       const sum = pendingRefunds(notes)
       return sum ? `ממתינים לך ${formatMoney(sum)}` : `${open.length} ממתינים`
     }
+    const next = upcomingTreatments(notes, b as TreatmentBoard)[0]
+    if (next?.date) return { hot: `תור ${next.title} · ${dayWhen(next.date)}` }
     const last = lastTreatment(notes, b as TreatmentBoard)
     if (!last.length) return 'ריק'
     const recent = [...last].sort((a, c) => c.date.localeCompare(a.date))[0]
@@ -43,7 +46,7 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
           </span>
           <span className="board-text">
             <b>{b.label}</b>
-            <span>{summary(b.id)}</span>
+            <BoardSummary value={summary(b.id)} />
           </span>
           <ChevronIcon width={18} height={18} className="flip muted" />
         </button>
@@ -52,27 +55,42 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
   )
 }
 
+function BoardSummary({ value }: { value: string | { hot: string } }) {
+  if (typeof value === 'string') return <span>{value}</span>
+  return (
+    <span className="hot">
+      <CalendarIcon width={13} height={13} /> {value.hot}
+    </span>
+  )
+}
+
+/** "היום", "מחר", "בעוד 8 ימים" */
+function dayWhen(iso: string): string {
+  return agoLabel(iso)
+}
+
 // ---------- לוח ----------
 
 interface BoardProps {
   board: NoteBoard
   notes: Note[]
   onEdit: (n: Note) => void
+  onDelete: (n: Note) => void
   toast: (msg: string) => void
 }
 
-export function NoteBoardView({ board, notes, onEdit, toast }: BoardProps) {
+export function NoteBoardView({ board, notes, onEdit, onDelete, toast }: BoardProps) {
   const meta = boardMeta(board)
   const items = notesOf(notes, board)
 
-  if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} onEdit={onEdit} />
+  if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} onEdit={onEdit} onDelete={onDelete} />
 
   const open = items.filter((n) => n.status < 2)
   const done = items.filter((n) => n.status >= 2).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 
   if (!items.length) return <BoardEmpty board={board} />
 
-  const row = (n: Note) => <NoteRow key={n.id} note={n} onEdit={onEdit} toast={toast} />
+  const row = (n: Note) => <NoteRow key={n.id} note={n} onEdit={onEdit} onDelete={onDelete} toast={toast} />
   return (
     <>
       {board === 'refunds' && open.length > 0 && (
@@ -91,8 +109,9 @@ export function NoteBoardView({ board, notes, onEdit, toast }: BoardProps) {
   )
 }
 
-function NoteRow({ note, onEdit, toast }: { note: Note; onEdit: (n: Note) => void; toast: (m: string) => void }) {
+function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: Note) => void; onDelete: (n: Note) => void; toast: (m: string) => void }) {
   const meta = boardMeta(note.board)
+  const swipe = useSwipeDelete(() => onDelete(note))
   const isDone = note.status >= 2
   const details: ReactNode[] = []
   if (note.board === 'refunds' && note.amount !== null) details.push(<b key="a">{formatMoney(note.amount)}</b>)
@@ -115,7 +134,9 @@ function NoteRow({ note, onEdit, toast }: { note: Note; onEdit: (n: Note) => voi
   if (note.notes) details.push(<span key="n">{note.notes}</span>)
 
   return (
-    <li className={`note${isDone ? ' is-done' : ''}`}>
+    <li className={`note${isDone ? ' is-done' : ''}${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
+      {swipe.bg}
+      <div className="note-row" style={swipe.rowStyle}>
       {note.board === 'shopping' && (
         <button
           className="check"
@@ -157,16 +178,39 @@ function NoteRow({ note, onEdit, toast }: { note: Note; onEdit: (n: Note) => voi
           {meta.statuses[note.status]}
         </button>
       )}
+      </div>
     </li>
   )
 }
 
-function TreatmentBoardView({ board, items, notes, onEdit }: { board: TreatmentBoard; items: Note[]; notes: Note[]; onEdit: (n: Note) => void }) {
+interface TreatmentProps {
+  board: TreatmentBoard
+  items: Note[]
+  notes: Note[]
+  onEdit: (n: Note) => void
+  onDelete: (n: Note) => void
+}
+
+function TreatmentBoardView({ board, items, notes, onEdit, onDelete }: TreatmentProps) {
   if (!items.length) return <BoardEmpty board={board} />
   const last = lastTreatment(notes, board)
-  const history = [...items].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+  const upcoming = upcomingTreatments(notes, board)
+  const past = items.filter((n) => !upcoming.includes(n)).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   return (
     <>
+      {upcoming.map((n, i) => (
+        <button key={n.id} className="next-appt" onClick={() => onEdit(n)}>
+          <span className="next-label">
+            <CalendarIcon width={15} height={15} /> {i === 0 ? 'התור הבא' : 'תור נוסף'}
+          </span>
+          <b>{n.title}</b>
+          <span className="next-when">
+            {fullDateLabel(n.date!).replace(/^(היום|מחר) · /, '')}
+            {n.time && ` · ${n.time}`}
+          </span>
+          <span className="next-chip">{agoLabel(n.date!)}</span>
+        </button>
+      ))}
       {last.length > 0 && (
         <div className="hair-last">
           {last.map((h) => (
@@ -178,26 +222,40 @@ function TreatmentBoardView({ board, items, notes, onEdit }: { board: TreatmentB
           ))}
         </div>
       )}
-      <h2 className="section-title">
-        כל התורים <span className="muted">{items.length}</span>
-      </h2>
-      <ul className="notes">
-        {history.map((n) => (
-          <li key={n.id} className="note">
-            <button className="note-body" onClick={() => onEdit(n)}>
-              <span className="note-title">{n.title}</span>
-              {n.notes && <span className="note-meta">{n.notes}</span>}
-            </button>
-            {n.date && (
-              <span className="note-date">
-                {shortDateLabel(n.date)}
-                <span className="muted">{agoLabel(n.date)}</span>
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
+      {past.length > 0 && (
+        <>
+          <h2 className="section-title">
+            תורים קודמים <span className="muted">{past.length}</span>
+          </h2>
+          <ul className="notes">
+            {past.map((n) => (
+              <TreatmentRow key={n.id} note={n} onEdit={onEdit} onDelete={onDelete} />
+            ))}
+          </ul>
+        </>
+      )}
     </>
+  )
+}
+
+function TreatmentRow({ note, onEdit, onDelete }: { note: Note; onEdit: (n: Note) => void; onDelete: (n: Note) => void }) {
+  const swipe = useSwipeDelete(() => onDelete(note))
+  return (
+    <li className={`note${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
+      {swipe.bg}
+      <div className="note-row" style={swipe.rowStyle}>
+        <button className="note-body" onClick={() => onEdit(note)}>
+          <span className="note-title">{note.title}</span>
+          {note.notes && <span className="note-meta">{note.notes}</span>}
+        </button>
+        {note.date && (
+          <span className="note-date">
+            {shortDateLabel(note.date)}
+            <span className="muted">{agoLabel(note.date)}</span>
+          </span>
+        )}
+      </div>
+    </li>
   )
 }
 
@@ -257,6 +315,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
     tracking: note?.tracking ?? '',
     amount: note?.amount !== null && note?.amount !== undefined ? String(note.amount) : '',
     date: note?.date ?? (board === 'shopping' ? '' : t),
+    time: note?.time ?? '',
     status: note?.status ?? 0,
     notes: note?.notes ?? '',
   }))
@@ -273,6 +332,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
       tracking: f.tracking.trim(),
       amount: amount !== null && Number.isFinite(amount) ? amount : null,
       date: f.date || null,
+      time: isTreatment(board) && f.date ? f.time || null : null,
       status: f.status,
       notes: f.notes.trim(),
     }
@@ -351,11 +411,27 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
           </label>
         )}
 
-        {board !== 'shopping' && (
-          <label className="field">
-            <span className="label">{board === 'packages' ? 'תאריך ההזמנה' : board === 'refunds' ? 'מתי ביקשתי' : 'תאריך התור'}</span>
-            <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
-          </label>
+        {isTreatment(board) ? (
+          <>
+            <div className="field-row">
+              <label className="field">
+                <span className="label">תאריך התור</span>
+                <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+              </label>
+              <label className="field">
+                <span className="label">שעה (לא חובה)</span>
+                <input type="time" className="date-input" value={f.time} onChange={(e) => set({ time: e.target.value })} />
+              </label>
+            </div>
+            {f.date >= today() && <span className="hint">תור עתידי נכנס גם ללוח השנה, ומתעדכן שם כשמשנים אותו כאן.</span>}
+          </>
+        ) : (
+          board !== 'shopping' && (
+            <label className="field">
+              <span className="label">{board === 'packages' ? 'תאריך ההזמנה' : 'מתי ביקשתי'}</span>
+              <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+            </label>
+          )
         )}
 
         {meta.statuses && (

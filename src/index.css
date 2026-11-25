@@ -498,3 +498,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .text-input:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .empty-emoji { font-size: 44px; opacity: .8; }
 .note-meta .waiting { color: var(--accent); }
+
+/* פתקים: החלקה למחיקה */
+.note { position: relative; overflow: hidden; touch-action: pan-y; padding: 0; }
+.note-row { display: flex; align-items: center; gap: 10px; padding: 0 2px; background: var(--bg); position: relative; }
+.note.swiping .note-row { transition: none; }
+.note:not(.swiping) .note-row { transition: transform .2s ease-out; }
+
+/* תור קרוב – בולט בראש לוח השיער / הריסים */
+.next-appt {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'label chip' 'title chip' 'when chip';
+  align-items: center; gap: 2px 12px; width: 100%; text-align: start; margin: 4px 0 12px; padding: 14px 16px;
+  border-radius: 14px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 40%, var(--surface)));
+}
+.next-label { grid-area: label; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--accent); }
+.next-appt b { grid-area: title; font-size: 20px; font-weight: 750; }
+.next-when { grid-area: when; font-size: 14px; color: var(--text); opacity: .85; }
+.next-chip { grid-area: chip; background: var(--accent); color: var(--on-accent); font-weight: 750; font-size: 14px; padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+.board-text .hot { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }

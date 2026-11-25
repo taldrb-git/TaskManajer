@@ -81,13 +81,19 @@ export const notesOf = (notes: Note[], b: NoteBoard) => notes.filter((n) => n.bo
 export function lastTreatment(notes: Note[], board: TreatmentBoard): { title: string; date: string }[] {
   const last = new Map<string, string>()
   for (const n of notesOf(notes, board)) {
-    if (!n.date || n.date > today()) continue
+    if (!n.date || n.date >= today()) continue // תור של היום ואילך = תור קרוב
     const k = n.title.trim()
     if (!k) continue
     if (!last.has(k) || last.get(k)! < n.date) last.set(k, n.date)
   }
   return [...last.entries()].map(([title, date]) => ({ title, date })).sort((a, b) => a.date.localeCompare(b.date))
 }
+
+/** תורים מהיום והלאה, הקרוב ראשון */
+export const upcomingTreatments = (notes: Note[], board: TreatmentBoard) =>
+  notesOf(notes, board)
+    .filter((n) => n.date && n.date >= today())
+    .sort((a, b) => (a.date! + (a.time ?? '')).localeCompare(b.date! + (b.time ?? '')))
 
 /** כמה כסף עוד לא חזר (החזרים שלא התקבלו) */
 export const pendingRefunds = (notes: Note[]) =>

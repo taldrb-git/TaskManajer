@@ -58,6 +58,8 @@ export interface Note {
   source: string
   tracking: string
   date: string | null // YYYY-MM-DD
+  time: string | null // HH:MM – שעת התור (שיער / ריסים)
+  task_id: string | null // תור עתידי: המשימה המקושרת בלוח השנה
   notes: string
   created_at: string
   updated_at: string

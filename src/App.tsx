@@ -14,7 +14,7 @@ import { toDateLabel, useDateDrag } from './components/useDateDrag'
 import { fullDateLabel, nextOccurrence, today } from './dates'
 import { ChartIcon, CheckCircleIcon, ChevronIcon, CloudIcon, GridCalendarIcon, MenuIcon, NoteIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon, TrashIcon, XIcon } from './icons'
 import { counts, dayMarks, sectionsFor, viewTitle } from './logic'
-import { addList, deleteList, deleteTask, postponeTask, restoreNote, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
+import { addList, deleteList, deleteNote, deleteTask, postponeTask, restoreNote, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
 import { supabase } from './supabase'
 import type { Note, NoteBoard, Task, View } from './types'
 
@@ -177,7 +177,7 @@ export default function App() {
     (t: Task) => show('המשימה עברה לסל המחזור', { label: 'ביטול', run: () => restoreTask(t.id) }),
     [show],
   )
-  /** מחיקה מהרשימה (החלקה ימינה במסך "היום" ובלוח השנה) – לסל המחזור, עם ביטול */
+  /** מחיקה בהחלקה ימינה (בכל המסכים) – לסל המחזור, עם ביטול */
   const onSwipeDelete = (t: Task) => {
     deleteTask(t.id)
     onDeleted(t)
@@ -332,7 +332,16 @@ export default function App() {
           ) : active.kind === 'notes' && !active.board ? (
             <NotesHome tasks={tasks} notes={notes} onOpen={(b) => go({ kind: 'notes', board: b })} />
           ) : noteBoard ? (
-            <NoteBoardView board={noteBoard} notes={notes} onEdit={(n) => setNoteEdit({ board: noteBoard, note: n })} toast={(m) => show(m)} />
+            <NoteBoardView
+              board={noteBoard}
+              notes={notes}
+              onEdit={(n) => setNoteEdit({ board: noteBoard, note: n })}
+              onDelete={(n) => {
+                deleteNote(n.id)
+                onNoteDeleted(n)
+              }}
+              toast={(m) => show(m)}
+            />
           ) : sections.every((s) => !s.tasks.length) ? (
             <Empty view={active} />
           ) : (
@@ -351,7 +360,7 @@ export default function App() {
                       dragging={dnd.dragging === t.id}
                       onToggle={onToggle}
                       onPostpone={onPostpone}
-                      swipeRight={active.kind === 'calendar' || active.kind === 'today' ? 'delete' : 'done'}
+                      swipeRight="delete"
                       onDelete={onSwipeDelete}
                       onOpen={(x) => setEditing(x.id)}
                     />

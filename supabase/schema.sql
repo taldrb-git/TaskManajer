@@ -46,6 +46,8 @@ create table if not exists public.notes (
   source            text not null default '',
   tracking          text not null default '',
   date              date,
+  time              text,
+  task_id           uuid,
   notes             text not null default '',
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
@@ -66,6 +68,9 @@ alter table public.tasks add column if not exists deleted_at timestamptz;
 
 create index if not exists lists_sync_idx on public.lists (user_id, server_updated_at);
 create index if not exists tasks_sync_idx on public.tasks (user_id, server_updated_at);
+alter table public.notes add column if not exists time text;
+alter table public.notes add column if not exists task_id uuid;
+
 -- הלוחות המותרים (נבנה מחדש בכל הרצה, כדי שלוחות חדשים ייכנסו)
 alter table public.notes drop constraint if exists notes_board_check;
 alter table public.notes add constraint notes_board_check check (board in ('shopping', 'packages', 'refunds', 'hair', 'lashes'));

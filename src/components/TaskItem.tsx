@@ -35,8 +35,9 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
   // ---------- החלקה ----------
   const [dx, setDx] = useState(0)
   const start = useRef<{ x: number; y: number; mode: 'idle' | 'swipe' | 'scroll' } | null>(null)
-  const canSwipe = !task.done && !!onPostpone
   const swipeDeletes = swipeRight === 'delete' && !!onDelete
+  // דחייה רק למשימות פתוחות; מחיקה – תמיד
+  const canSwipe = (!task.done && !!onPostpone) || swipeDeletes
 
   const onTouchStart = (e: TouchEvent<HTMLLIElement>) => {
     dragProps?.onTouchStart?.(e)
@@ -51,14 +52,14 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
       if (Math.abs(mx) > 12 && Math.abs(mx) > Math.abs(my) * 1.5) s.mode = 'swipe'
       else if (Math.abs(my) > 10) s.mode = 'scroll'
     }
-    if (s.mode === 'swipe') setDx(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, mx)))
+    if (s.mode === 'swipe') setDx(Math.max(task.done || !onPostpone ? 0 : -SWIPE_MAX, Math.min(SWIPE_MAX, mx)))
   }
   const onTouchEnd = () => {
     const s = start.current
     start.current = null
     if (s?.mode === 'swipe') {
       if (dx >= SWIPE_TRIGGER) (swipeDeletes ? onDelete!(task) : onToggle(task))
-      else if (dx <= -SWIPE_TRIGGER) onPostpone?.(task)
+      else if (dx <= -SWIPE_TRIGGER && !task.done) onPostpone?.(task)
     }
     setDx(0)
   }
