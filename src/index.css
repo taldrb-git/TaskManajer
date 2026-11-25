@@ -412,10 +412,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 /* ===== חגים ותאריך עברי ===== */
 .holiday-chip { display: inline-block; margin-inline-start: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); vertical-align: middle; }
 .heb-date { font-weight: 400; color: var(--muted); font-size: 14px; margin-inline-start: 8px; }
-.cal-day.holiday .cal-num { color: var(--accent); }
-.cal-day.holiday.selected .cal-num { color: var(--on-accent); }
-.cal-day.holiday { position: relative; }
-.cal-day.holiday::before { content: ""; position: absolute; top: 3px; inset-inline-end: 22%; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); }
+/* חג: עיגול רקע שקוף מאוד ומספר בגוון רך של צבע ההדגשה (בלי נקודה) */
+.cal-day.holiday:not(.selected) .cal-num {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 65%, #fff);
+}
+.cal-day.holiday.out .cal-num { opacity: .5; }
 
 /* ===== סיכום ===== */
 .stats { display: flex; flex-direction: column; gap: 16px; padding-top: 6px; }
