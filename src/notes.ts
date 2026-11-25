@@ -16,17 +16,34 @@ export interface BoardMeta {
 export const BOARDS: BoardMeta[] = [
   { id: 'someday', label: 'יום אחד', emoji: '💭', titleLabel: 'מה לעשות' },
   { id: 'shopping', label: 'לקנות', emoji: '🛒', doneTitle: 'נקנו', titleLabel: 'מה לקנות' },
-  { id: 'packages', label: 'חבילות', emoji: '📦', statuses: ['הוזמנה', 'בדרך', 'הגיעה'], doneTitle: 'הגיעו', titleLabel: 'מה הזמנתי' },
+  { id: 'packages', label: 'חבילות', emoji: '📦', statuses: ['הוזמנה', 'בדרך', 'הגיעה'], doneTitle: 'הגיעו', titleLabel: 'מאיפה הזמנתי' },
   { id: 'refunds', label: 'החזרים', emoji: '💸', statuses: ['ביקשתי', 'אושר', 'התקבל בבנק'], doneTitle: 'התקבלו', titleLabel: 'ממי (חנות / חברה)' },
   { id: 'hair', label: 'שיער', emoji: '💇‍♀️', titleLabel: 'סוג הטיפול' },
+  { id: 'lashes', label: 'ריסים', emoji: '👁️', titleLabel: 'סוג הטיפול' },
 ]
 
 export const boardMeta = (b: Board): BoardMeta => BOARDS.find((x) => x.id === b)!
 
 export const isBoard = (s: string): s is Board => BOARDS.some((b) => b.id === s)
 
-/** סוגי טיפול שמוצעים בלוח השיער (אפשר לכתוב גם סוג אחר) */
-export const HAIR_TYPES = ['גוונים', 'פתיחת תלתלים', 'תספורת', 'צבע']
+/** לוחות של תורים (טיפולים) – "מתי היה התור האחרון" */
+export type TreatmentBoard = 'hair' | 'lashes'
+export const isTreatment = (b: Board): b is TreatmentBoard => b === 'hair' || b === 'lashes'
+
+/** סוגי טיפול שמוצעים בכל לוח תורים (אפשר לכתוב גם סוג אחר) */
+export const TREATMENT_TYPES: Record<TreatmentBoard, string[]> = {
+  hair: ['גוונים', 'פתיחת תלתלים', 'תספורת', 'צבע'],
+  lashes: ['הרמת ריסים', 'צביעת ריסים'],
+}
+
+/** חבילה: "הוזמנה היום", "מחכה יום אחד", "מחכה יומיים", "מחכה 5 ימים" */
+export function waitingLabel(ordered: string): string {
+  const d = diffDays(ordered, today())
+  if (d <= 0) return 'הוזמנה היום'
+  if (d === 1) return 'מחכה יום אחד'
+  if (d === 2) return 'מחכה יומיים'
+  return `מחכה ${d} ימים`
+}
 
 const money = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 2 })
 export const formatMoney = (n: number) => money.format(n)
@@ -60,10 +77,10 @@ export function agoLabel(iso: string): string {
 
 export const notesOf = (notes: Note[], b: NoteBoard) => notes.filter((n) => n.board === b)
 
-/** הטיפול האחרון מכל סוג – לראש לוח השיער */
-export function lastHair(notes: Note[]): { title: string; date: string }[] {
+/** הטיפול האחרון מכל סוג – לראש לוח השיער / הריסים */
+export function lastTreatment(notes: Note[], board: TreatmentBoard): { title: string; date: string }[] {
   const last = new Map<string, string>()
-  for (const n of notesOf(notes, 'hair')) {
+  for (const n of notesOf(notes, board)) {
     if (!n.date || n.date > today()) continue
     const k = n.title.trim()
     if (!k) continue

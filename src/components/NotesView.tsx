@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { today } from '../dates'
 import { ChevronIcon, CopyIcon, TrashIcon } from '../icons'
-import { BOARDS, HAIR_TYPES, agoLabel, boardMeta, formatMoney, lastHair, notesOf, pendingRefunds, shortDateLabel } from '../notes'
+import { BOARDS, TREATMENT_TYPES, agoLabel, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, waitingLabel, type TreatmentBoard } from '../notes'
 import { addNote, deleteNote, updateNote } from '../store'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
@@ -28,7 +28,7 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
       const sum = pendingRefunds(notes)
       return sum ? `ממתינים לך ${formatMoney(sum)}` : `${open.length} ממתינים`
     }
-    const last = lastHair(notes)
+    const last = lastTreatment(notes, b as TreatmentBoard)
     if (!last.length) return 'ריק'
     const recent = [...last].sort((a, c) => c.date.localeCompare(a.date))[0]
     return `${recent.title} · ${agoLabel(recent.date)}`
@@ -65,7 +65,7 @@ export function NoteBoardView({ board, notes, onEdit, toast }: BoardProps) {
   const meta = boardMeta(board)
   const items = notesOf(notes, board)
 
-  if (board === 'hair') return <HairBoard items={items} notes={notes} onEdit={onEdit} />
+  if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} onEdit={onEdit} />
 
   const open = items.filter((n) => n.status < 2)
   const done = items.filter((n) => n.status >= 2).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -98,8 +98,19 @@ function NoteRow({ note, onEdit, toast }: { note: Note; onEdit: (n: Note) => voi
   if (note.board === 'refunds' && note.amount !== null) details.push(<b key="a">{formatMoney(note.amount)}</b>)
   if (note.source) details.push(<span key="s">{note.source}</span>)
   if (note.date) {
-    const label = note.board === 'packages' ? `צפויה ${shortDateLabel(note.date)}` : note.board === 'refunds' ? `ביקשתי ${agoLabel(note.date)}` : shortDateLabel(note.date)
-    details.push(<span key="d">{label}</span>)
+    const label =
+      note.board === 'packages'
+        ? isDone
+          ? `הוזמנה ${shortDateLabel(note.date)}`
+          : waitingLabel(note.date)
+        : note.board === 'refunds'
+          ? `ביקשתי ${agoLabel(note.date)}`
+          : shortDateLabel(note.date)
+    details.push(
+      <span key="d" className={note.board === 'packages' && !isDone ? 'waiting' : undefined}>
+        {label}
+      </span>,
+    )
   }
   if (note.notes) details.push(<span key="n">{note.notes}</span>)
 
@@ -150,9 +161,9 @@ function NoteRow({ note, onEdit, toast }: { note: Note; onEdit: (n: Note) => voi
   )
 }
 
-function HairBoard({ items, notes, onEdit }: { items: Note[]; notes: Note[]; onEdit: (n: Note) => void }) {
-  if (!items.length) return <BoardEmpty board="hair" />
-  const last = lastHair(notes)
+function TreatmentBoardView({ board, items, notes, onEdit }: { board: TreatmentBoard; items: Note[]; notes: Note[]; onEdit: (n: Note) => void }) {
+  if (!items.length) return <BoardEmpty board={board} />
+  const last = lastTreatment(notes, board)
   const history = [...items].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   return (
     <>
@@ -207,9 +218,10 @@ function Collapsible({ title, count, children }: { title: string; count: number;
 
 const EMPTY: Record<NoteBoard, string> = {
   shopping: 'דברים שצריך או רוצים לקנות, בלי תאריך.',
-  packages: 'כל חבילה שהזמנת: מאיפה, מספר מעקב, ומה המצב שלה.',
+  packages: 'כל חבילה שהזמנת: מאיפה, מספר מעקב, וכמה ימים היא כבר בדרך.',
   refunds: 'כסף שאמור לחזור אלייך – עד שרואים את הזיכוי בבנק.',
   hair: 'מתי היה התור האחרון לגוונים, לתלתלים או לתספורת.',
+  lashes: 'מתי היה התור האחרון להרמת ריסים.',
 }
 
 function BoardEmpty({ board }: { board: NoteBoard }) {
@@ -244,7 +256,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
     source: note?.source ?? '',
     tracking: note?.tracking ?? '',
     amount: note?.amount !== null && note?.amount !== undefined ? String(note.amount) : '',
-    date: note?.date ?? (board === 'refunds' || board === 'hair' ? t : ''),
+    date: note?.date ?? (board === 'shopping' ? '' : t),
     status: note?.status ?? 0,
     notes: note?.notes ?? '',
   }))
@@ -269,7 +281,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
     onClose()
   }
 
-  const hairTypes = [...new Set([...HAIR_TYPES, ...notesOf(notes, 'hair').map((n) => n.title.trim()).filter(Boolean)])]
+  const types = isTreatment(board) ? [...new Set([...TREATMENT_TYPES[board], ...notesOf(notes, board).map((n) => n.title.trim()).filter(Boolean)])] : []
 
   return (
     <Sheet
@@ -299,12 +311,19 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
       <form className="note-form" onSubmit={save}>
         <label className="field">
           <span className="label">{meta.titleLabel}</span>
-          <input className="text-input" autoFocus={!note} value={f.title} onChange={(e) => set({ title: e.target.value })} enterKeyHint="done" />
+          <input
+            className="text-input"
+            autoFocus={!note}
+            value={f.title}
+            onChange={(e) => set({ title: e.target.value })}
+            enterKeyHint="done"
+            placeholder={board === 'packages' ? 'למשל: עלי אקספרס, שיין, אמזון' : undefined}
+          />
         </label>
 
-        {board === 'hair' && (
+        {types.length > 0 && (
           <div className="chips">
-            {hairTypes.map((h) => (
+            {types.map((h) => (
               <button type="button" key={h} className={`chip${f.title.trim() === h ? ' on' : ''}`} onClick={() => set({ title: h })}>
                 {h}
               </button>
@@ -315,8 +334,8 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
         {board === 'packages' && (
           <>
             <label className="field">
-              <span className="label">מאיפה</span>
-              <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} placeholder="למשל: עלי אקספרס, שיין" />
+              <span className="label">מה הזמנתי (לא חובה)</span>
+              <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} />
             </label>
             <label className="field">
               <span className="label">מספר מעקב</span>
@@ -334,7 +353,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
 
         {board !== 'shopping' && (
           <label className="field">
-            <span className="label">{board === 'packages' ? 'הגעה משוערת' : board === 'refunds' ? 'מתי ביקשתי' : 'תאריך התור'}</span>
+            <span className="label">{board === 'packages' ? 'תאריך ההזמנה' : board === 'refunds' ? 'מתי ביקשתי' : 'תאריך התור'}</span>
             <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
           </label>
         )}

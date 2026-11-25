@@ -39,15 +39,15 @@ export interface TaskList {
 }
 
 /** לוחות במסך "פתקים". "יום אחד" = משימות בלי תאריך; השאר = פתקים (Note) */
-export type Board = 'someday' | 'shopping' | 'packages' | 'refunds' | 'hair'
+export type Board = 'someday' | 'shopping' | 'packages' | 'refunds' | 'hair' | 'lashes'
 export type NoteBoard = Exclude<Board, 'someday'>
 
 /**
  * פריט בלוח פתקים. השדות משמשים לפי הלוח:
  * - shopping: title, status (0 = לקנות, 2 = נקנה)
- * - packages: title (מה), source (מאיפה), tracking, date (הגעה משוערת), status 0 הוזמנה / 1 בדרך / 2 הגיעה
+ * - packages: title (מאיפה הזמנתי), source (מה הזמנתי – לא חובה), tracking, date (תאריך ההזמנה), status 0 הוזמנה / 1 בדרך / 2 הגיעה
  * - refunds: title (ממי), amount, date (מתי ביקשתי), status 0 ביקשתי / 1 אושר / 2 התקבל בבנק
- * - hair: title (סוג הטיפול, למשל "גוונים"), date (תאריך התור)
+ * - hair / lashes: title (סוג הטיפול, למשל "גוונים" או "הרמת ריסים"), date (תאריך התור)
  */
 export interface Note {
   id: string

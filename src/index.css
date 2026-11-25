@@ -497,3 +497,4 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .text-input { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--bg); width: 100%; }
 .text-input:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .empty-emoji { font-size: 44px; opacity: .8; }
+.note-meta .waiting { color: var(--accent); }

@@ -5,7 +5,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
-import { addDays, diffDays, nextOccurrence, today } from './dates'
+import { addDays, diffDays, nextOccurrence, toISODate, today } from './dates'
 import { supabase } from './supabase'
 import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
 
@@ -20,6 +20,7 @@ interface Persisted {
   dirty: Record<Table, string[]>
   cursor: Record<Table, string | null>
   userId: string | null
+  migrations?: string[] // הגירות נתונים שכבר רצו במכשיר הזה
 }
 
 export type SyncStatus = 'local' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error'
@@ -63,6 +64,24 @@ function normalizeNote(n: Note): Note {
   }
 }
 
+/**
+ * חבילות מגרסה 0.7.0: title היה "מה הזמנתי", source היה "מאיפה" ו-date היה הגעה משוערת.
+ * מעכשיו title = מאיפה (השורה הראשית), source = מה (לא חובה), date = תאריך ההזמנה.
+ */
+function migrate(d: Persisted) {
+  const done = new Set(d.migrations ?? [])
+  if (!done.has('packages-store-first')) {
+    for (const n of Object.values(d.notes)) {
+      if (n.board !== 'packages') continue
+      const swapped = n.source ? { title: n.source, source: n.title } : {}
+      d.notes[n.id] = { ...n, ...swapped, date: toISODate(new Date(n.created_at)), updated_at: new Date().toISOString() }
+      if (!d.dirty.notes.includes(n.id)) d.dirty.notes.push(n.id)
+    }
+    done.add('packages-store-first')
+  }
+  d.migrations = [...done]
+}
+
 const TRASH_DAYS = 30
 const PURGED = '1970-01-01T00:00:00.000Z' // "נמחק לצמיתות" – מחוץ לטווח סל המחזור בכל המכשירים
 
@@ -87,6 +106,7 @@ function load(): Persisted {
       const d: Persisted = { ...e, ...p, dirty: { ...e.dirty, ...p.dirty }, cursor: { ...e.cursor, ...p.cursor } }
       for (const id of Object.keys(d.tasks)) d.tasks[id] = normalizeTask(d.tasks[id])
       for (const id of Object.keys(d.notes)) d.notes[id] = normalizeNote(d.notes[id])
+      migrate(d)
       return d
     }
   } catch {

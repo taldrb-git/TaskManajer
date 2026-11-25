@@ -39,7 +39,7 @@ create table if not exists public.tasks (
 create table if not exists public.notes (
   id                uuid primary key,
   user_id           uuid not null default auth.uid() references auth.users (id) on delete cascade,
-  board             text not null check (board in ('shopping', 'packages', 'refunds', 'hair')),
+  board             text not null,
   title             text not null default '',
   status            smallint not null default 0 check (status between 0 and 2),
   amount            numeric,
@@ -66,6 +66,10 @@ alter table public.tasks add column if not exists deleted_at timestamptz;
 
 create index if not exists lists_sync_idx on public.lists (user_id, server_updated_at);
 create index if not exists tasks_sync_idx on public.tasks (user_id, server_updated_at);
+-- הלוחות המותרים (נבנה מחדש בכל הרצה, כדי שלוחות חדשים ייכנסו)
+alter table public.notes drop constraint if exists notes_board_check;
+alter table public.notes add constraint notes_board_check check (board in ('shopping', 'packages', 'refunds', 'hair', 'lashes'));
+
 create index if not exists notes_sync_idx on public.notes (user_id, server_updated_at);
 
 -- חותמת זמן של השרת – לפיה כל מכשיר יודע מה השתנה מאז הסנכרון האחרון
