@@ -501,7 +501,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 /* פתקים: החלקה למחיקה */
 .note { position: relative; overflow: hidden; touch-action: pan-y; padding: 0; }
-.note-row { display: flex; align-items: center; gap: 10px; padding: 0 2px; background: var(--bg); position: relative; }
+.note-row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 2px; background: var(--bg); position: relative; }
 .note.swiping .note-row { transition: none; }
 .note:not(.swiping) .note-row { transition: transform .2s ease-out; }
 
@@ -517,3 +517,20 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .next-when { grid-area: when; font-size: 14px; color: var(--text); opacity: .85; }
 .next-chip { grid-area: chip; background: var(--accent); color: var(--on-accent); font-weight: 750; font-size: 14px; padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
 .board-text .hot { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+
+/* תזכורת לקביעת תור */
+.board-tools { display: flex; justify-content: flex-end; margin: -4px 0 6px; }
+.board-tools .btn { color: var(--muted); }
+.book-due {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'label btn' 'title btn' 'when btn';
+  align-items: center; gap: 2px 12px; margin: 4px 0 12px; padding: 14px 16px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+}
+.book-due .next-label { color: var(--warn); }
+.book-due b { grid-area: title; font-size: 20px; font-weight: 750; }
+.book-due .btn { grid-area: btn; }
+.board-text .hot.bell { color: var(--warn); }
+.book-pref-row { display: flex; align-items: center; gap: 12px; }
+.book-pref-name { flex: 1; font-weight: 600; }
+.book-pref-row select { width: auto; min-width: 150px; }

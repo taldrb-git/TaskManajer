@@ -103,14 +103,14 @@ function useToasts() {
 // ---------- האפליקציה ----------
 
 export default function App() {
-  const { tasks, trash, lists, notes, sync, user } = useStore()
+  const { tasks, trash, lists, notes, prefs, sync, user } = useStore()
   const [view, setViewState] = useState<View>(parseHash)
   const [query, setQuery] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [composing, setComposing] = useState(false)
   // עריכת פתק: note = null → פריט חדש
-  const [noteEdit, setNoteEdit] = useState<{ board: NoteBoard; note: Note | null } | null>(null)
+  const [noteEdit, setNoteEdit] = useState<{ board: NoteBoard; note: Note | null; preset?: Partial<Note> } | null>(null)
   const [drawer, setDrawer] = useState(false)
   const { canInstall, install } = useInstallPrompt()
   const { toast, show, dismiss } = useToasts()
@@ -330,12 +330,14 @@ export default function App() {
           ) : active.kind === 'trash' ? (
             <TrashView trash={trash} toast={(m) => show(m)} />
           ) : active.kind === 'notes' && !active.board ? (
-            <NotesHome tasks={tasks} notes={notes} onOpen={(b) => go({ kind: 'notes', board: b })} />
+            <NotesHome tasks={tasks} notes={notes} prefs={prefs} onOpen={(b) => go({ kind: 'notes', board: b })} />
           ) : noteBoard ? (
             <NoteBoardView
               board={noteBoard}
               notes={notes}
+              prefs={prefs}
               onEdit={(n) => setNoteEdit({ board: noteBoard, note: n })}
+              onAdd={(preset) => setNoteEdit({ board: noteBoard, note: null, preset })}
               onDelete={(n) => {
                 deleteNote(n.id)
                 onNoteDeleted(n)
@@ -393,7 +395,7 @@ export default function App() {
       {composing && <Composer view={active} lists={lists} onClose={() => setComposing(false)} />}
 
       {noteEdit && (
-        <NoteEditor board={noteEdit.board} note={noteEdit.note} notes={notes} onClose={() => setNoteEdit(null)} onDeleted={onNoteDeleted} />
+        <NoteEditor board={noteEdit.board} note={noteEdit.note} preset={noteEdit.preset} notes={notes} onClose={() => setNoteEdit(null)} onDeleted={onNoteDeleted} />
       )}
       {editing && (
         <TaskEditor

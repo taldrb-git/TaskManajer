@@ -1,8 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { fullDateLabel, today } from '../dates'
-import { CalendarIcon, ChevronIcon, CopyIcon, TrashIcon } from '../icons'
-import { BOARDS, TREATMENT_TYPES, agoLabel, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
-import { addNote, deleteNote, updateNote } from '../store'
+import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, TrashIcon } from '../icons'
+import { BOARDS, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
+import { addNote, deleteNote, setBookingInterval, setBookingLead, updateNote } from '../store'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
 import { useSwipeDelete } from './useSwipeDelete'
@@ -10,8 +10,8 @@ import { useSwipeDelete } from './useSwipeDelete'
 // ---------- מסך הלוחות ----------
 
 /** כרטיס לכל לוח, עם שורת סיכום קצרה */
-export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note[]; onOpen: (b: Board) => void }) {
-  const summary = (b: Board): string | { hot: string } => {
+export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; notes: Note[]; prefs: BookingPrefs; onOpen: (b: Board) => void }) {
+  const summary = (b: Board): string | { hot: string; bell?: boolean } => {
     if (b === 'someday') {
       const n = tasks.filter((t) => !t.done && !t.due).length
       return n === 1 ? 'רעיון אחד' : n ? `${n} רעיונות` : 'ריק'
@@ -29,6 +29,8 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
       const sum = pendingRefunds(notes)
       return sum ? `ממתינים לך ${formatMoney(sum)}` : `${open.length} ממתינים`
     }
+    const due = bookingStatus(notes, prefs, b as TreatmentBoard).filter((s) => s.due)
+    if (due.length) return { hot: `לקבוע תור ${due.map((s) => s.type).join(', ')}`, bell: true }
     const next = upcomingTreatments(notes, b as TreatmentBoard)[0]
     if (next?.date) return { hot: `תור ${next.title} · ${dayWhen(next.date)}` }
     const last = lastTreatment(notes, b as TreatmentBoard)
@@ -55,11 +57,11 @@ export function NotesHome({ tasks, notes, onOpen }: { tasks: Task[]; notes: Note
   )
 }
 
-function BoardSummary({ value }: { value: string | { hot: string } }) {
+function BoardSummary({ value }: { value: string | { hot: string; bell?: boolean } }) {
   if (typeof value === 'string') return <span>{value}</span>
   return (
-    <span className="hot">
-      <CalendarIcon width={13} height={13} /> {value.hot}
+    <span className={`hot${value.bell ? ' bell' : ''}`}>
+      {value.bell ? <BellIcon width={13} height={13} /> : <CalendarIcon width={13} height={13} />} {value.hot}
     </span>
   )
 }
@@ -74,16 +76,18 @@ function dayWhen(iso: string): string {
 interface BoardProps {
   board: NoteBoard
   notes: Note[]
+  prefs: BookingPrefs
   onEdit: (n: Note) => void
+  onAdd: (preset: Partial<Note>) => void
   onDelete: (n: Note) => void
   toast: (msg: string) => void
 }
 
-export function NoteBoardView({ board, notes, onEdit, onDelete, toast }: BoardProps) {
+export function NoteBoardView({ board, notes, prefs, onEdit, onAdd, onDelete, toast }: BoardProps) {
   const meta = boardMeta(board)
   const items = notesOf(notes, board)
 
-  if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} onEdit={onEdit} onDelete={onDelete} />
+  if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} prefs={prefs} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} />
 
   const open = items.filter((n) => n.status < 2)
   const done = items.filter((n) => n.status >= 2).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -187,17 +191,54 @@ interface TreatmentProps {
   board: TreatmentBoard
   items: Note[]
   notes: Note[]
+  prefs: BookingPrefs
   onEdit: (n: Note) => void
+  onAdd: (preset: Partial<Note>) => void
   onDelete: (n: Note) => void
 }
 
-function TreatmentBoardView({ board, items, notes, onEdit, onDelete }: TreatmentProps) {
-  if (!items.length) return <BoardEmpty board={board} />
+function TreatmentBoardView({ board, items, notes, prefs, onEdit, onAdd, onDelete }: TreatmentProps) {
+  const [settings, setSettings] = useState(false)
+  const status = bookingStatus(notes, prefs, board)
+  const tools = (
+    <div className="board-tools">
+      <button className="btn small ghost" onClick={() => setSettings(true)}>
+        <BellIcon width={16} height={16} /> תזכורות לקביעת תור
+      </button>
+    </div>
+  )
+  const sheet = settings && <BookingSettings board={board} notes={notes} prefs={prefs} onClose={() => setSettings(false)} />
+  if (!items.length)
+    return (
+      <>
+        {tools}
+        <BoardEmpty board={board} />
+        {sheet}
+      </>
+    )
   const last = lastTreatment(notes, board)
   const upcoming = upcomingTreatments(notes, board)
   const past = items.filter((n) => !upcoming.includes(n)).sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   return (
     <>
+      {tools}
+      {sheet}
+      {status
+        .filter((s) => s.due)
+        .map((s) => (
+          <div key={s.type} className="book-due">
+            <span className="next-label">
+              <BellIcon width={15} height={15} /> הגיע הזמן לקבוע תור
+            </span>
+            <b>{s.type}</b>
+            <span className="next-when">
+              התור האחרון {agoLabel(s.last)} · מומלץ {everyMonthsLabel(s.months)}
+            </span>
+            <button className="btn small primary" onClick={() => onAdd({ title: s.type, date: s.next > today() ? s.next : today() })}>
+              קביעת תור
+            </button>
+          </div>
+        ))}
       {upcoming.map((n, i) => (
         <button key={n.id} className="next-appt" onClick={() => onEdit(n)}>
           <span className="next-label">
@@ -259,6 +300,68 @@ function TreatmentRow({ note, onEdit, onDelete }: { note: Note; onEdit: (n: Note
   )
 }
 
+// ---------- הגדרות תזכורות ללוח תורים ----------
+
+function BookingSettings({ board, notes, prefs, onClose }: { board: TreatmentBoard; notes: Note[]; prefs: BookingPrefs; onClose: () => void }) {
+  const status = new Map(bookingStatus(notes, prefs, board).map((s) => [s.type, s]))
+  return (
+    <Sheet
+      title={`תזכורות · ${boardMeta(board).label}`}
+      onClose={onClose}
+      footer={
+        <>
+          <span className="spacer" />
+          <button className="btn primary" onClick={onClose}>
+            סיום
+          </button>
+        </>
+      }
+    >
+      <p className="hint">
+        לכל סוג טיפול בוחרים כל כמה זמן קובעים תור. כשהמועד מתקרב ועוד לא קבעת תור, תופיע משימה "לקבוע תור" במסך היום, וגם תזכורת בלוח הזה.
+      </p>
+      {treatmentTypes(notes, board).map((type) => {
+        const months = prefs.intervals[prefKey(board, type)] ?? 0
+        const s = status.get(type)
+        return (
+          <label key={type} className="field book-pref">
+            <span className="book-pref-row">
+              <span className="book-pref-name">{type}</span>
+              <select value={months} onChange={(e) => setBookingInterval(board, type, Number(e.target.value) || null)}>
+                <option value={0}>בלי תזכורת</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                  <option key={m} value={m}>
+                    {everyMonthsLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </span>
+            {months > 0 && (
+              <span className="hint">
+                {s
+                  ? s.booked
+                    ? 'כבר קבעת תור 👍'
+                    : `התור האחרון ${shortDateLabel(s.last)} · הבא מומלץ ב-${shortDateLabel(s.next)}`
+                  : 'עוד אין תור קודם – התזכורת תתחיל אחרי שתרשמי תור'}
+              </span>
+            )}
+          </label>
+        )
+      })}
+      <label className="field">
+        <span className="label">מתי להזכיר</span>
+        <select value={prefs.lead[board] ?? 14} onChange={(e) => setBookingLead(board, Number(e.target.value))}>
+          {LEAD_OPTIONS.map(([d, l]) => (
+            <option key={d} value={d}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Sheet>
+  )
+}
+
 function Collapsible({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
@@ -301,20 +404,21 @@ function BoardEmpty({ board }: { board: NoteBoard }) {
 interface EditorProps {
   board: NoteBoard
   note: Note | null // null = פריט חדש
+  preset?: Partial<Note> // ערכים התחלתיים לפריט חדש (למשל מ"קביעת תור")
   notes: Note[]
   onClose: () => void
   onDeleted: (n: Note) => void
 }
 
-export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorProps) {
+export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: EditorProps) {
   const meta = boardMeta(board)
   const t = today()
   const [f, setF] = useState(() => ({
-    title: note?.title ?? '',
+    title: note?.title ?? preset?.title ?? '',
     source: note?.source ?? '',
     tracking: note?.tracking ?? '',
     amount: note?.amount !== null && note?.amount !== undefined ? String(note.amount) : '',
-    date: note?.date ?? (board === 'shopping' ? '' : t),
+    date: note?.date ?? preset?.date ?? (board === 'shopping' ? '' : t),
     time: note?.time ?? '',
     status: note?.status ?? 0,
     notes: note?.notes ?? '',
@@ -341,7 +445,7 @@ export function NoteEditor({ board, note, notes, onClose, onDeleted }: EditorPro
     onClose()
   }
 
-  const types = isTreatment(board) ? [...new Set([...TREATMENT_TYPES[board], ...notesOf(notes, board).map((n) => n.title.trim()).filter(Boolean)])] : []
+  const types = isTreatment(board) ? treatmentTypes(notes, board) : []
 
   return (
     <Sheet

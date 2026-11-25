@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import { addDays, diffDays, nextOccurrence, toISODate, today } from './dates'
+import { DEFAULT_BOOKING_PREFS, bookingStatus, prefKey, type BookingPrefs, type TreatmentBoard } from './notes'
 import { supabase } from './supabase'
 import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
 
@@ -21,6 +22,8 @@ interface Persisted {
   cursor: Record<Table, string | null>
   userId: string | null
   migrations?: string[] // הגירות נתונים שכבר רצו במכשיר הזה
+  prefs?: BookingPrefs // הגדרות תזכורות לקביעת תור (נשמר במכשיר, לא מסונכרן)
+  booking?: Record<string, { taskId: string; last: string }> // משימות "לקבוע תור" שנוצרו, לפי "hair:גוונים"
 }
 
 export type SyncStatus = 'local' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error'
@@ -30,6 +33,7 @@ export interface Snapshot {
   trash: Task[] // נמחקו ב-30 הימים האחרונים, החדשות למעלה
   lists: TaskList[]
   notes: Note[] // החדשים למעלה
+  prefs: BookingPrefs
   sync: SyncStatus
   syncError: string | null
   lastSynced: string | null
@@ -138,6 +142,7 @@ function rebuild() {
     notes: Object.values(data.notes)
       .filter((n) => !n.deleted)
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    prefs: data.prefs ?? DEFAULT_BOOKING_PREFS,
     sync,
     syncError,
     lastSynced,
@@ -419,6 +424,7 @@ export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'boa
   })
   commit('notes', n)
   syncAppointment(n.id)
+  syncBookingReminders()
   return data.notes[n.id]
 }
 
@@ -427,6 +433,73 @@ export function updateNote(id: string, patch: Partial<Omit<Note, 'id' | 'board' 
   if (!n) return
   commit('notes', { ...n, ...patch, updated_at: now() })
   syncAppointment(id)
+  syncBookingReminders()
+}
+
+// ---------- תזכורות לקביעת תור ----------
+
+const BOOKING_BOARDS: TreatmentBoard[] = ['hair', 'lashes']
+
+export function setBookingInterval(board: TreatmentBoard, type: string, months: number | null) {
+  const prefs = structuredClone(data.prefs ?? DEFAULT_BOOKING_PREFS)
+  const key = prefKey(board, type)
+  if (months) prefs.intervals[key] = months
+  else delete prefs.intervals[key]
+  data.prefs = prefs
+  save()
+  syncBookingReminders()
+  emit()
+}
+
+export function setBookingLead(board: TreatmentBoard, days: number) {
+  const prefs = structuredClone(data.prefs ?? DEFAULT_BOOKING_PREFS)
+  prefs.lead[board] = days
+  data.prefs = prefs
+  save()
+  syncBookingReminders()
+  emit()
+}
+
+/**
+ * כשמתקרב מועד התור הבא (לפי "כל X חודשים") ועוד לא נקבע תור – נוצרת משימה להיום: "לקבוע תור גוונים".
+ * היא מתגלגלת כל יום עד שמטפלים בה. כשנקבע תור היא מסומנת כבוצעה; כשמבטלים את ההגדרה היא נמחקת.
+ * משימה שמחקת לא תיווצר שוב עד התור הבא (נזכרים לפי תאריך התור האחרון).
+ */
+function syncBookingReminders() {
+  const prefs = data.prefs ?? DEFAULT_BOOKING_PREFS
+  const notes = Object.values(data.notes).filter((n) => !n.deleted)
+  const booking = { ...(data.booking ?? {}) }
+  const seen = new Set<string>()
+  for (const board of BOOKING_BOARDS) {
+    for (const s of bookingStatus(notes, prefs, board)) {
+      const key = prefKey(board, s.type)
+      const rec = booking[key]
+      const task = rec ? data.tasks[rec.taskId] : undefined
+      if (s.due) {
+        seen.add(key)
+        if (rec && rec.last === s.last) continue // כבר נוצרה (או שנמחקה בכוונה) לתור הזה
+        const t = addTask({ title: `לקבוע תור ${s.type}`, due: today() })
+        booking[key] = { taskId: t.id, last: s.last }
+      } else if (rec && rec.last === s.last && s.booked) {
+        seen.add(key)
+        if (task && !task.done && !task.deleted) updateTask(task.id, { done: true, done_at: now() }) // נקבע תור
+      } else if (rec && rec.last === s.last) {
+        seen.add(key) // עוד לא הגיע הזמן (למשל שינית את ההגדרה) – משאירים את הרישום
+        if (task && !task.done && !task.deleted) deleteTask(task.id)
+      }
+    }
+  }
+  // הגדרה שבוטלה או תור חדש שכבר עבר – הרישום הישן לא רלוונטי
+  for (const key of Object.keys(booking)) {
+    if (seen.has(key)) continue
+    const task = data.tasks[booking[key].taskId]
+    if (task && !task.done && !task.deleted) deleteTask(task.id)
+    delete booking[key]
+  }
+  if (JSON.stringify(booking) !== JSON.stringify(data.booking ?? {})) {
+    data.booking = booking
+    save()
+  }
 }
 
 export function deleteNote(id: string) {
@@ -500,6 +573,7 @@ export function rollover() {
     scheduleSync()
   }
   if (changed || dayChanged) emit() // גם בלי שינוי – כדי ש"היום" במסך יתעדכן
+  syncBookingReminders() // יום חדש – אולי הגיע הזמן להזכיר לקבוע תור
 }
 
 function scheduleMidnight() {

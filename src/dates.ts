@@ -42,6 +42,13 @@ export function nextOccurrence(iso: string, repeat: 'daily' | 'weekdays' | 'week
   }
 }
 
+/** הוספת חודשים. 31 בחודש → היום האחרון בחודש קצר יותר */
+export function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const last = new Date(y, m - 1 + months + 1, 0).getDate()
+  return toISODate(new Date(y, m - 1 + months, Math.min(d, last)))
+}
+
 export function addDays(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)
   return toISODate(new Date(y, m - 1, d + days))

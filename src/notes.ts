@@ -1,4 +1,4 @@
-import { diffDays, today } from './dates'
+import { addDays, addMonths, diffDays, today } from './dates'
 import type { Board, Note, NoteBoard } from './types'
 
 export interface BoardMeta {
@@ -33,8 +33,67 @@ export const isTreatment = (b: Board): b is TreatmentBoard => b === 'hair' || b 
 /** סוגי טיפול שמוצעים בכל לוח תורים (אפשר לכתוב גם סוג אחר) */
 export const TREATMENT_TYPES: Record<TreatmentBoard, string[]> = {
   hair: ['גוונים', 'פתיחת תלתלים', 'תספורת', 'צבע'],
-  lashes: ['הרמת ריסים', 'צביעת ריסים'],
+  lashes: ['הרמת ריסים', 'הרמת גבות', 'צביעת ריסים'],
 }
+
+// ---------- תזכורות לקביעת תור ----------
+
+/** הגדרות התזכורות של לוחות התורים. המפתח: "hair:גוונים" */
+export interface BookingPrefs {
+  intervals: Record<string, number> // כל כמה חודשים
+  lead: Record<TreatmentBoard, number> // כמה ימים לפני להזכיר
+}
+
+export const DEFAULT_BOOKING_PREFS: BookingPrefs = {
+  intervals: { 'hair:גוונים': 6, 'hair:פתיחת תלתלים': 4, 'lashes:הרמת ריסים': 3, 'lashes:הרמת גבות': 3 },
+  lead: { hair: 14, lashes: 14 },
+}
+
+export const LEAD_OPTIONS: [number, string][] = [
+  [0, 'ביום עצמו'],
+  [7, 'שבוע לפני'],
+  [14, 'שבועיים לפני'],
+  [30, 'חודש לפני'],
+]
+
+export const prefKey = (board: TreatmentBoard, type: string) => `${board}:${type.trim()}`
+
+/** סוגי הטיפול בלוח: המוצעים + כל סוג שכבר נרשם */
+export const treatmentTypes = (notes: Note[], board: TreatmentBoard) => [
+  ...new Set([...TREATMENT_TYPES[board], ...notesOf(notes, board).map((n) => n.title.trim()).filter(Boolean)]),
+]
+
+export interface BookingStatus {
+  board: TreatmentBoard
+  type: string
+  months: number
+  last: string // התור האחרון שכבר היה
+  next: string // מתי מומלץ התור הבא
+  remindFrom: string // מאיזה יום להזכיר
+  booked: boolean // יש כבר תור עתידי מהסוג הזה
+  due: boolean // צריך להזכיר עכשיו: הגיע הזמן ועוד לא נקבע תור
+}
+
+/** מצב התזכורת לכל סוג טיפול שיש לו הגדרת "כל X חודשים" ותור קודם */
+export function bookingStatus(notes: Note[], prefs: BookingPrefs, board: TreatmentBoard): BookingStatus[] {
+  const t = today()
+  const last = new Map(lastTreatment(notes, board).map((x) => [x.title, x.date]))
+  const upcoming = new Set(upcomingTreatments(notes, board).map((n) => n.title.trim()))
+  const out: BookingStatus[] = []
+  for (const type of treatmentTypes(notes, board)) {
+    const months = prefs.intervals[prefKey(board, type)]
+    const lastDate = last.get(type)
+    if (!months || !lastDate) continue
+    const next = addMonths(lastDate, months)
+    const remindFrom = addDays(next, -(prefs.lead[board] ?? 14))
+    const booked = upcoming.has(type)
+    out.push({ board, type, months, last: lastDate, next, remindFrom, booked, due: !booked && t >= remindFrom })
+  }
+  return out
+}
+
+/** "כל חודש", "כל חודשיים", "כל 3 חודשים" */
+export const everyMonthsLabel = (m: number) => (m === 1 ? 'כל חודש' : m === 2 ? 'כל חודשיים' : `כל ${m} חודשים`)
 
 /** חבילה: "הוזמנה היום", "מחכה יום אחד", "מחכה יומיים", "מחכה 5 ימים" */
 export function waitingLabel(ordered: string): string {
