@@ -29,7 +29,7 @@
 | אחסון מקומי | localStorage | מפתח `task-manager:v1` |
 | עיצוב | כהה בלבד | הצבעים מוגדרים כמשתנים ב-`:root` בקובץ `index.css`. אין מצב בהיר. צבע ההדגשה נקבע לפי `data-accent` על `<html>` (lavender, sage, peach או rose), כל צבע עם `--accent`, `--accent-soft` ו-`--on-accent`. הבחירה נשמרת ב-localStorage במפתח `task-manager:accent` ומוחלת ב-`main.tsx` לפני הציור הראשון |
 | ענן | @supabase/supabase-js | Auth, Postgres, Realtime |
-| ניתוב | hash (`#/today`, `#/calendar/2026-11-19`, `#/list/<id>`) | עובד ב-GitHub Pages בלי הגדרות שרת. בחירת יום בלוח מחליפה את הכתובת (`replaceState`) ולא מוסיפה צעד להיסטוריה |
+| ניתוב | hash (`#/today`, `#/calendar/2026-11-19`, `#/list/<id>`) | עובד ב-GitHub Pages בלי הגדרות שרת. בחירת יום בלוח מחליפה את הכתובת (`replaceState`) ולא מוסיפה צעד להיסטוריה. כתובת בלי מסך (או רשימה שלא קיימת) פותחת את לוח השנה על היום |
 
 ## מבנה הקבצים
 

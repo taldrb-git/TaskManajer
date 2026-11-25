@@ -25,8 +25,9 @@ function parseHash(): View {
     const d = h.slice(9)
     return { kind: 'calendar', date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : today() }
   }
-  if (h === 'upcoming' || h === 'all' || h === 'done' || h === 'stats' || h === 'trash') return { kind: h }
-  return { kind: 'today' }
+  if (h === 'today' || h === 'upcoming' || h === 'all' || h === 'done' || h === 'stats' || h === 'trash') return { kind: h }
+  // ברירת המחדל: לוח שנה על היום
+  return { kind: 'calendar', date: today() }
 }
 
 function viewHash(v: View): string {
@@ -121,7 +122,7 @@ export default function App() {
   // רשימה שנמחקה (גם ממכשיר אחר) – חוזרים ל"היום"
   const listMissing = view.kind === 'list' && !lists.some((l) => l.id === view.id)
   useEffect(() => {
-    if (listMissing) go({ kind: 'today' })
+    if (listMissing) go({ kind: 'calendar', date: today() })
   }, [listMissing, go])
 
   const active: View = useMemo(() => (query !== null ? { kind: 'search', q: query } : view), [query, view])
