@@ -13,7 +13,7 @@ interface Props {
   onClose: () => void
 }
 
-/** חלונית הוספת משימה שנפתחת מכפתור ה-+. נשארת פתוחה להוספה רצופה. */
+/** חלונית הוספת משימה שנפתחת מכפתור ה-+. נסגרת אחרי ההוספה. */
 export function Composer({ view, lists, onClose }: Props) {
   useDismiss(onClose)
   const viewport = useKeyboardViewport()
@@ -33,8 +33,7 @@ export function Composer({ view, lists, onClose }: Props) {
     e.preventDefault()
     if (!parsed.title) return
     addTask({ title: parsed.title, due: due ?? (parsed.repeat ? t : null), priority: parsed.priority, list_id: listId, time: parsed.time, repeat: parsed.repeat })
-    setText('')
-    inputRef.current?.focus()
+    onClose()
   }
 
   return (
