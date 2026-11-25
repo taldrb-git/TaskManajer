@@ -7,6 +7,7 @@ export const REPEAT_LABEL: Record<Repeat, string> = {
   daily: 'כל יום',
   weekdays: 'ימי חול (א׳–ה׳)',
   weekly: 'כל שבוע',
+  biweekly: 'כל שבועיים',
   monthly: 'כל חודש',
   yearly: 'כל שנה',
 }
@@ -309,12 +310,14 @@ export function parseQuickAdd(text: string): { title: string; due?: string; prio
     title = title.replace(tm.match, ' ')
   }
 
-  // חזרה: "כל יום ראשון", "כל 10 לחודש", "כל יום", "בימי חול", "כל שבוע/חודש/שנה"
-  const rWeekday = title.match(new RegExp(String.raw`\sכל\s+יום\s+(${WEEKDAY_RE})(?=\s)`))
+  // חזרה: "כל יום ראשון", "כל שבועיים ביום ראשון", "כל 10 לחודש", "כל יום", "בימי חול", "כל שבוע/שבועיים/חודש/שנה"
+  const rWeekday =
+    title.match(new RegExp(String.raw`\sכל\s+שבועיים\s+ב(?:יום\s+)?(${WEEKDAY_RE})(?=\s)`)) ??
+    title.match(new RegExp(String.raw`\sכל\s+יום\s+(${WEEKDAY_RE})(?=\s)`))
   const rMonthDay = title.match(/\s(?:כל|ב-?)\s?(\d{1,2})\s+ל(?:כל\s+)?(?:ה)?חודש(?=\s)/)
-  const rSimple = title.match(/\s(כל\s+יום\s+חול|בימי\s+חול|כל\s+יום|כל\s+שבוע|כל\s+חודש|כל\s+שנה)(?=\s)/)
+  const rSimple = title.match(/\s(כל\s+יום\s+חול|בימי\s+חול|כל\s+יום|כל\s+שבועיים|כל\s+שבוע|כל\s+חודש|כל\s+שנה)(?=\s)/)
   if (rWeekday) {
-    repeat = 'weekly'
+    repeat = rWeekday[0].includes('שבועיים') ? 'biweekly' : 'weekly'
     const target = WEEKDAY_NAMES.indexOf(rWeekday[1])
     due = addDays(t, (target - new Date().getDay() + 7) % 7) // היום, אם היום זה היום הזה
     title = title.replace(rWeekday[0], ' ')
@@ -324,7 +327,7 @@ export function parseQuickAdd(text: string): { title: string; due?: string; prio
     title = title.replace(rMonthDay[0], ' ')
   } else if (rSimple) {
     const w = rSimple[1].replace(/\s+/g, ' ')
-    repeat = w.includes('חול') ? 'weekdays' : w === 'כל יום' ? 'daily' : w === 'כל שבוע' ? 'weekly' : w === 'כל חודש' ? 'monthly' : 'yearly'
+    repeat = w.includes('חול') ? 'weekdays' : w === 'כל יום' ? 'daily' : w === 'כל שבוע' ? 'weekly' : w === 'כל שבועיים' ? 'biweekly' : w === 'כל חודש' ? 'monthly' : 'yearly'
     title = title.replace(rSimple[0], ' ')
   }
   const take = (re: RegExp, toDate: (m: RegExpMatchArray) => string | undefined) => {

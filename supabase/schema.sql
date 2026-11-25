@@ -26,7 +26,7 @@ create table if not exists public.tasks (
   postponed         integer not null default 0,
   time              text,
   remind            integer,
-  repeat            text check (repeat in ('daily', 'weekdays', 'weekly', 'monthly', 'yearly')),
+  repeat            text,
   subtasks          jsonb not null default '[]'::jsonb,
   deleted_at        timestamptz,
   created_at        timestamptz not null default now(),
@@ -39,7 +39,10 @@ create table if not exists public.tasks (
 alter table public.tasks add column if not exists postponed integer not null default 0;
 alter table public.tasks add column if not exists time text;
 alter table public.tasks add column if not exists remind integer;
-alter table public.tasks add column if not exists repeat text check (repeat in ('daily', 'weekdays', 'weekly', 'monthly', 'yearly'));
+alter table public.tasks add column if not exists repeat text;
+-- ערכי החזרה המותרים (נבנה מחדש בכל הרצה, כדי שערכים חדשים כמו biweekly ייכנסו)
+alter table public.tasks drop constraint if exists tasks_repeat_check;
+alter table public.tasks add constraint tasks_repeat_check check (repeat in ('daily', 'weekdays', 'weekly', 'biweekly', 'monthly', 'yearly'));
 alter table public.tasks add column if not exists subtasks jsonb not null default '[]'::jsonb;
 alter table public.tasks add column if not exists deleted_at timestamptz;
 

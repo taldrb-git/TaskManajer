@@ -1,7 +1,7 @@
 export type Priority = 0 | 1 | 2 | 3 // 0 = ללא, 1 = נמוכה, 2 = בינונית, 3 = גבוהה
 
-/** חזרה: כל יום, ימי חול (א׳–ה׳), כל שבוע, כל חודש, כל שנה */
-export type Repeat = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'
+/** חזרה: כל יום, ימי חול (א׳–ה׳), כל שבוע, כל שבועיים, כל חודש, כל שנה */
+export type Repeat = 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 
 export interface Subtask {
   id: string

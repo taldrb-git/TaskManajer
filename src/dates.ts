@@ -16,7 +16,7 @@ export function diffDays(from: string, to: string): number {
 }
 
 /** המופע הבא של משימה חוזרת אחרי התאריך iso */
-export function nextOccurrence(iso: string, repeat: 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly'): string {
+export function nextOccurrence(iso: string, repeat: 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly' | 'yearly'): string {
   const [y, m, d] = iso.split('-').map(Number)
   switch (repeat) {
     case 'daily':
@@ -29,6 +29,8 @@ export function nextOccurrence(iso: string, repeat: 'daily' | 'weekdays' | 'week
     }
     case 'weekly':
       return addDays(iso, 7)
+    case 'biweekly':
+      return addDays(iso, 14)
     case 'monthly': {
       const last = new Date(y, m + 1, 0).getDate() // 31 בינואר → 28/29 בפברואר
       return toISODate(new Date(y, m, Math.min(d, last)))

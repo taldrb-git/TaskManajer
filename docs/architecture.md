@@ -79,7 +79,7 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 | `postponed` | int | מספר ימי הדחייה: גלגול אוטומטי ודחייה בהחלקה. ברירת המחדל 0 |
 | `time` | text / null | `HH:MM` |
 | `remind` | int / null | כמה דקות לפני השעה התזכורת יוצאת (0 = בזמן). רלוונטי רק כשיש `due` ו-`time` |
-| `repeat` | text / null | `daily` / `weekdays` / `weekly` / `monthly` / `yearly` |
+| `repeat` | text / null | `daily` / `weekdays` / `weekly` / `biweekly` (14 יום) / `monthly` / `yearly`. ב-Supabase מוגבל ב-`tasks_repeat_check`, שנבנה מחדש בכל הרצה של `schema.sql` |
 | `subtasks` | jsonb | `[{ id, title, done }]` |
 | `deleted_at` | timestamptz / null | זמן המחיקה, בשביל סל המחזור. `1970-01-01` מסמן מחיקה לצמיתות |
 
