@@ -16,11 +16,9 @@ interface Props {
   onOpen: (t: Task) => void
   /** החלקה: ימינה = בוצעה (או מחיקה), שמאלה = דחייה למחר (רק בטלפון, רק למשימות פתוחות) */
   onPostpone?: (t: Task) => void
-  /** מה עושה החלקה ימינה: 'done' (ברירת מחדל) או 'delete' (בלוח השנה) */
+  /** מה עושה החלקה ימינה: 'done' (ברירת מחדל) או 'delete' (במסך "היום" ובלוח השנה) */
   swipeRight?: 'done' | 'delete'
   onDelete?: (t: Task) => void
-  /** לחיצה ארוכה (בטלפון) – במסך "היום" מוחקת את המשימה */
-  onLongPress?: (t: Task) => void
   /** אירועי גרירה (מ-useDateDrag) – רק במסכים שיש בהם תאריכים לשחרר עליהם */
   dragProps?: HTMLAttributes<HTMLLIElement>
   dragging?: boolean
@@ -28,27 +26,8 @@ interface Props {
 
 const SWIPE_TRIGGER = 90 // פיקסלים להפעלה
 const SWIPE_MAX = 140
-const LONG_PRESS_MS = 550
 
-/**
- * אחרי לחיצה ארוכה המשימה נמחקת מהרשימה, והשחרור של האצבע היה "לוחץ" על המשימה שתפסה את מקומה.
- * בולעים את הלחיצה הבאה בכל המסמך (הלחיצה מגיעה מיד אחרי השחרור).
- */
-function suppressNextClick() {
-  const swallow = (e: MouseEvent) => {
-    e.stopPropagation()
-    e.preventDefault()
-    cleanup()
-  }
-  const cleanup = () => {
-    window.removeEventListener('click', swallow, true)
-    clearTimeout(timer)
-  }
-  window.addEventListener('click', swallow, true)
-  const timer = window.setTimeout(cleanup, 400)
-}
-
-export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, onOpen, onPostpone, swipeRight = 'done', onDelete, onLongPress, dragProps, dragging }: Props) {
+export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, onOpen, onPostpone, swipeRight = 'done', onDelete, dragProps, dragging }: Props) {
   const overdue = !task.done && task.due !== null && task.due < today()
   const showDue = task.due !== null && !hideDue && !(hideToday && task.due === today())
   const subDone = task.subtasks.filter((s) => s.done).length
@@ -59,36 +38,11 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
   const canSwipe = !task.done && !!onPostpone
   const swipeDeletes = swipeRight === 'delete' && !!onDelete
 
-  // ---------- לחיצה ארוכה ----------
-  const press = useRef<{ x: number; y: number; timer: number } | null>(null)
-  const cancelPress = () => {
-    if (press.current) clearTimeout(press.current.timer)
-    press.current = null
-  }
-
   const onTouchStart = (e: TouchEvent<HTMLLIElement>) => {
     dragProps?.onTouchStart?.(e)
-    const x = e.touches[0].clientX
-    const y = e.touches[0].clientY
-    if (canSwipe) start.current = { x, y, mode: 'idle' }
-    if (onLongPress) {
-      cancelPress()
-      press.current = {
-        x,
-        y,
-        timer: window.setTimeout(() => {
-          press.current = null
-          start.current = null
-          suppressNextClick()
-          navigator.vibrate?.(15)
-          onLongPress(task)
-        }, LONG_PRESS_MS),
-      }
-    }
+    if (canSwipe) start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, mode: 'idle' }
   }
   const onTouchMove = (e: TouchEvent<HTMLLIElement>) => {
-    const p = press.current
-    if (p && Math.hypot(e.touches[0].clientX - p.x, e.touches[0].clientY - p.y) > 8) cancelPress()
     const s = start.current
     if (!s || dragging) return
     const mx = e.touches[0].clientX - s.x
@@ -100,7 +54,6 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
     if (s.mode === 'swipe') setDx(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, mx)))
   }
   const onTouchEnd = () => {
-    cancelPress()
     const s = start.current
     start.current = null
     if (s?.mode === 'swipe') {
@@ -110,7 +63,7 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
     setDx(0)
   }
 
-  const cls = ['task', task.done && 'is-done', (dragProps || onLongPress) && 'draggable', dragging && 'dragging', dx !== 0 && 'swiping'].filter(Boolean).join(' ')
+  const cls = ['task', task.done && 'is-done', dragProps && 'draggable', dragging && 'dragging', dx !== 0 && 'swiping'].filter(Boolean).join(' ')
   const rightKind = swipeDeletes ? 'delete' : 'done'
 
   return (

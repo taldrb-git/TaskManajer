@@ -167,7 +167,7 @@ export default function App() {
     (t: Task) => show('המשימה עברה לסל המחזור', { label: 'ביטול', run: () => restoreTask(t.id) }),
     [show],
   )
-  /** מחיקה מהרשימה (החלקה ימינה בלוח השנה, לחיצה ארוכה במסך "היום") – לסל המחזור, עם ביטול */
+  /** מחיקה מהרשימה (החלקה ימינה במסך "היום" ובלוח השנה) – לסל המחזור, עם ביטול */
   const onSwipeDelete = (t: Task) => {
     deleteTask(t.id)
     onDeleted(t)
@@ -329,9 +329,8 @@ export default function App() {
                       dragging={dnd.dragging === t.id}
                       onToggle={onToggle}
                       onPostpone={onPostpone}
-                      swipeRight={active.kind === 'calendar' ? 'delete' : 'done'}
+                      swipeRight={active.kind === 'calendar' || active.kind === 'today' ? 'delete' : 'done'}
                       onDelete={onSwipeDelete}
-                      onLongPress={active.kind === 'today' ? onSwipeDelete : undefined}
                       onOpen={(x) => setEditing(x.id)}
                     />
                   ))}

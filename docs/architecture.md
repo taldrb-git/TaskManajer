@@ -214,10 +214,7 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
   אם התזוזה האנכית מעל 10px, זו גלילה ולא קורה כלום.
 - לשורה יש `touch-action: pan-y`, כך שהדפדפן מטפל רק בגלילה אנכית ולא צריך `preventDefault`.
 - **הפעלה:** החל מ-90px. שמאלה מפעיל את `onPostpone`, שקורא ל-`postponeTask` (יום קדימה ו-`postponed + 1`).
-  ימינה תלוי ב-prop `swipeRight`: `'done'` (ברירת מחדל) מפעיל את `onToggle`, ו-`'delete'` (רק בלוח השנה) מפעיל את `onDelete`. ב-App זה `onSwipeDelete`: `deleteTask` ואחריו הודעה עם ביטול (`restoreTask`).
-- **לחיצה ארוכה:** prop `onLongPress`, שמועבר רק במסך "היום" (שם אין גרירה, אז אין התנגשות עם הלחיצה הארוכה של `useDateDrag`).
-  טיימר של 550ms מ-`touchstart`, שמתבטל בתזוזה של יותר מ-8px או בשחרור. כשהוא מופעל: `navigator.vibrate`, ואז `onLongPress` (מחיקה).
-  המשימה נעלמת מהרשימה, והלחיצה (`click`) שהדפדפן שולח בשחרור הייתה פוגעת במשימה שתפסה את מקומה. לכן `suppressNextClick` בולעת את ה-`click` הבא בשלב ה-capture של `window`, ל-400ms לכל היותר.
+  ימינה תלוי ב-prop `swipeRight`: `'done'` (ברירת מחדל) מפעיל את `onToggle`, ו-`'delete'` (במסך "היום" ובלוח השנה) מפעיל את `onDelete`. ב-App זה `onSwipeDelete`: `deleteTask` ואחריו הודעה עם ביטול (`restoreTask`).
 - **יחד עם הגרירה:** האירוע `onTouchStart` מועבר גם ל-`useDateDrag`. הגרירה מתבטלת לבד כשיש תזוזה של יותר מ-8px לפני הלחיצה הארוכה, ולכן שתי המחוות לא מתנגשות.
 
 ## גרף הסיכום
