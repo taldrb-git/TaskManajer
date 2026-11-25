@@ -86,7 +86,7 @@ function useToasts() {
   const show = useCallback((text: string, action?: ToastMsg['action']) => {
     clearTimeout(timer.current)
     setToast({ id: Date.now(), text, action })
-    timer.current = setTimeout(() => setToast(null), action ? 5000 : 2500)
+    timer.current = setTimeout(() => setToast(null), action ? 3000 : 1800)
   }, [])
   const dismiss = useCallback(() => setToast(null), [])
   return { toast, show, dismiss }
