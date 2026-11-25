@@ -73,7 +73,7 @@ alter table public.notes add column if not exists task_id uuid;
 
 -- הלוחות המותרים (נבנה מחדש בכל הרצה, כדי שלוחות חדשים ייכנסו)
 alter table public.notes drop constraint if exists notes_board_check;
-alter table public.notes add constraint notes_board_check check (board in ('shopping', 'packages', 'refunds', 'hair', 'lashes'));
+alter table public.notes add constraint notes_board_check check (board in ('shopping', 'packages', 'refunds', 'hair', 'lashes', 'pills'));
 
 create index if not exists notes_sync_idx on public.notes (user_id, server_updated_at);
 

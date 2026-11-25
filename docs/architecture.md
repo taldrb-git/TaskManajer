@@ -42,6 +42,7 @@ src/
   logic.ts              מיון, חלוקה למקטעים לפי מסך, ספירות, סימוני ימים ללוח (dayMarks), פענוח הוספה מהירה ותאריכים (parseQuickAdd)
   dates.ts              תאריכים מקומיים (YYYY-MM-DD), הפרש ימים (diffDays), המופע הבא של משימה חוזרת (nextOccurrence), תוויות בעברית
   types.ts              Task, TaskList, Note, Board, View
+  pills.ts              גלולות: ציר זמן של חפיסות והפסקות (timeline), מצב היום (pillState), ימי הפסקה ללוח (breakDays), תחזית (upcomingBreaks)
   notes.ts              הגדרות הלוחות של "פתקים" (BOARDS), תוויות זמן (agoLabel, shortDateLabel), סכום ממתין (pendingRefunds), התור האחרון בשיער (lastHair)
   accent.ts             צבע ההדגשה: רשימת הצבעים, applyAccent, useAccent
   holidays.ts           חגים ותאריך עברי מ-Intl (calendar: hebrew): holidayOn, hebrewDate, hebrewDateFull, gematria
@@ -127,6 +128,10 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
   - ההגדרות ב-`Persisted.prefs` (`intervals` לפי `"hair:גוונים"`, ו-`lead` לכל לוח). ברירות המחדל ב-`DEFAULT_BOOKING_PREFS`. נשמרות במכשיר ולא מסונכרנות.
   - `syncBookingReminders` (ב-`store.ts`) רץ אחרי כל שינוי בפתקים, בשינוי הגדרה ובכל `rollover` (טעינה, חצות, חזרה לאפליקציה). כש-`due` הוא יוצר משימה להיום "לקבוע תור <סוג>" ושומר ב-`Persisted.booking` את המזהה שלה ואת תאריך התור האחרון.
   - אותו תאריך תור אחרון → לא יוצרים שוב (גם אם המשימה נמחקה). נקבע תור (`booked`) → המשימה מסומנת כבוצעה. ההגדרה בוטלה או הוזזה קדימה → המשימה נמחקת.
+- **גלולות (`pills.ts`):** כל חפיסה שנרשמה היא `Note` עם `board = 'pills'` ו-`date` = הכדור הראשון. `timeline` בונה מהן קטעים (`pack` של 21 יום, `break` של 7). חפיסה שמתחילה עד היום שאחרי סוף הקודמת נחשבת מחוברת (`chain` גדל). אחרי החפיסה האחרונה שנרשמה הציר ממשיך לבד (`projected`).
+  - `connectPack` רושם את החפיסה הבאה ביום שאחרי סוף הנוכחית (ואם הנוכחית מחושבת, רושם גם אותה). מותר רק כש-`chain < MAX_CHAIN` (2). `disconnectPack` מוחק את החפיסה המחוברת.
+  - `syncPillTasks` (ב-`store.ts`) יוצר משימות לימי המעבר ב-35 הימים הקרובים, לפי מפתח `"break:YYYY-MM-DD"` / `"pack:YYYY-MM-DD"` ב-`Persisted.pillTasks`. משימה של מעבר שכבר לא בתוכנית נמחקת. רץ אחרי שינוי בגלולות ובכל `rollover`, וגלגול בחצות מדלג על המשימות האלה.
+  - בלוח השנה: `breakDays` → `Calendar` מקבל `breaks` ומוסיף `.pill-break` (פס מתחת למספר).
 - **החלקה למחיקה בפתקים:** `useSwipeDelete` (רק ימינה, אותו רקע `.swipe-bg.delete` כמו במשימות). במשימות `swipeRight` הוא `'delete'` בכל המסכים, ומחיקה בהחלקה עובדת גם על משימות שהושלמו (דחייה רק על פתוחות).
 - **הגירת נתונים:** `Persisted.migrations` שומר אילו הגירות כבר רצו במכשיר. `packages-store-first` הופכת חבילות מגרסה 0.7.0 (שבהן `title` היה "מה" ו-`source` היה "מאיפה") ומציבה ב-`date` את יום היצירה כתאריך הזמנה.
 - **`notes_board_check`** ב-`schema.sql` נבנה מחדש בכל הרצה, כך שלוח חדש נכנס בהרצה חוזרת של הקובץ. `agoLabel` מתרגם להפרש: ימים עד שבועיים, שבועות עד חודשיים, ואז חודשים ושנים.

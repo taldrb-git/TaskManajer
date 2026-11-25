@@ -9,6 +9,7 @@ interface Props {
   marks: Map<string, DayMark>
   onSelect: (iso: string) => void
   dropOver?: string | null // יום שמשימה נגררת מעליו
+  breaks?: Map<string, unknown> // ימי הפסקה בגלולות
 }
 
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
@@ -36,7 +37,7 @@ function readCollapsed(): boolean {
  * לוח חודשי: נקודה מתחת לכל יום שיש בו משימות, לחיצה על יום בוחרת אותו.
  * מצב מכווץ מציג רק את השבוע של היום הנבחר. החלקה למעלה מכווצת, החלקה למטה מרחיבה.
  */
-export function Calendar({ selected, marks, onSelect, dropOver }: Props) {
+export function Calendar({ selected, marks, onSelect, dropOver, breaks }: Props) {
   // anchor: התאריך שקובע מה מוצג – החודש שלו (מורחב) או השבוע שלו (מכווץ)
   const [anchor, setAnchor] = useState(selected)
   const [collapsed, setCollapsedState] = useState(readCollapsed)
@@ -134,10 +135,11 @@ export function Calendar({ selected, marks, onSelect, dropOver }: Props) {
             iso === selected ? 'selected' : '',
             iso === dropOver ? 'drop-over' : '',
             holiday ? 'holiday' : '',
+            breaks?.has(iso) ? 'pill-break' : '',
           ]
             .filter(Boolean)
             .join(' ')
-          const label = `${dayFmt.format(parse(iso))}${holiday ? `, ${holiday}` : ''}${mark?.open ? `, ${mark.open} משימות פתוחות` : ''}`
+          const label = `${dayFmt.format(parse(iso))}${holiday ? `, ${holiday}` : ''}${breaks?.has(iso) ? ', הפסקה בגלולות' : ''}${mark?.open ? `, ${mark.open} משימות פתוחות` : ''}`
           return (
             <button key={iso} data-date={iso} className={cls} onClick={() => onSelect(iso)} aria-label={label} aria-pressed={iso === selected} title={holiday ?? undefined}>
               <span className="cal-num">{day}</span>

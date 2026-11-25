@@ -534,3 +534,26 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .book-pref-row { display: flex; align-items: center; gap: 12px; }
 .book-pref-name { flex: 1; font-weight: 600; }
 .book-pref-row select { width: auto; min-width: 150px; }
+
+/* ===== גלולות ===== */
+.cal-day.pill-break::after { content: ""; display: block; width: 62%; height: 3px; border-radius: 2px; background: #e89ab9; opacity: .75; margin-top: -1px; }
+.pill-chip { background: color-mix(in srgb, #e89ab9 16%, transparent); color: #f0b4cb; }
+.pill-card {
+  display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; padding: 16px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 40%, var(--surface)));
+}
+.pill-card.on-break { border-color: color-mix(in srgb, #e89ab9 55%, transparent); background: color-mix(in srgb, #e89ab9 10%, var(--surface)); }
+.pill-card.on-break .next-label { color: #f0b4cb; }
+.pill-card b { font-size: 22px; font-weight: 750; }
+.pill-track { display: flex; gap: 3px; margin: 4px 0; }
+.pill-track i { flex: 1; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.pill-track i.on { background: var(--accent); }
+.pill-card.on-break .pill-track i.on { background: #e89ab9; }
+.pill-actions { display: flex; justify-content: flex-start; margin: -2px 0 14px; }
+.pill-warn { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); color: var(--text); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; font-size: 14px; }
+.pill-forecast { margin-bottom: 18px; }
+.pill-forecast ul { list-style: none; margin: 0 0 8px; padding: 0; }
+.pill-forecast li { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.pill-forecast li:last-child { border-bottom: 0; }
+.board-text .hot.moon { color: #f0b4cb; }

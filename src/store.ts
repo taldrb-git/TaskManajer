@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import { addDays, diffDays, nextOccurrence, toISODate, today } from './dates'
+import { MAX_CHAIN, pillState, timeline } from './pills'
 import { DEFAULT_BOOKING_PREFS, bookingStatus, prefKey, type BookingPrefs, type TreatmentBoard } from './notes'
 import { supabase } from './supabase'
 import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
@@ -24,6 +25,7 @@ interface Persisted {
   migrations?: string[] // הגירות נתונים שכבר רצו במכשיר הזה
   prefs?: BookingPrefs // הגדרות תזכורות לקביעת תור (נשמר במכשיר, לא מסונכרן)
   booking?: Record<string, { taskId: string; last: string }> // משימות "לקבוע תור" שנוצרו, לפי "hair:גוונים"
+  pillTasks?: Record<string, string> // משימות של ימי מעבר בגלולות: "break:2026-12-06" → מזהה משימה
 }
 
 export type SyncStatus = 'local' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error'
@@ -425,6 +427,7 @@ export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'boa
   commit('notes', n)
   syncAppointment(n.id)
   syncBookingReminders()
+  if (board === 'pills') syncPillTasks()
   return data.notes[n.id]
 }
 
@@ -434,6 +437,67 @@ export function updateNote(id: string, patch: Partial<Omit<Note, 'id' | 'board' 
   commit('notes', { ...n, ...patch, updated_at: now() })
   syncAppointment(id)
   syncBookingReminders()
+  if (n.board === 'pills') syncPillTasks()
+}
+
+// ---------- גלולות ----------
+
+const alivePills = () => Object.values(data.notes).filter((n) => !n.deleted && n.board === 'pills')
+
+/** חיבור חפיסה: החפיסה הבאה מתחילה מיד, בלי הפסקה. עד MAX_CHAIN ברצף */
+export function connectPack() {
+  const s = pillState(alivePills())
+  if (!s?.canConnect) return
+  if (s.current.projected) addNote('pills', { title: 'חפיסה', date: s.current.start }) // רושמים את החפיסה הנוכחית
+  addNote('pills', { title: 'חפיסה', date: addDays(s.current.end, 1) })
+}
+
+/** ביטול חיבור: חוזרים להפסקה רגילה אחרי החפיסה הנוכחית */
+export function disconnectPack() {
+  const s = pillState(alivePills())
+  if (!s?.connected || !s.next?.noteId) return
+  deleteNote(s.next.noteId)
+}
+
+/**
+ * משימות לימי המעבר הקרובים (5 שבועות קדימה): "💊 מתחילה הפסקה", "💊 מתחילה חפיסה חדשה".
+ * כשהתוכנית משתנה (חיבור, חפיסה בתאריך אחר) – משימות שכבר לא נכונות נמחקות ונוצרות חדשות.
+ */
+function syncPillTasks() {
+  const t = today()
+  const horizon = addDays(t, 35)
+  const desired = new Map<string, { title: string; due: string }>()
+  for (const s of timeline(alivePills(), addDays(t, 60))) {
+    if (s.start < t || s.start > horizon) continue
+    const title =
+      s.kind === 'break'
+        ? s.chain >= MAX_CHAIN
+          ? `💊 מתחילה הפסקה (אחרי ${s.chain} חפיסות ברצף – לא לחבר)`
+          : '💊 מתחילה הפסקה'
+        : s.chain > 1
+          ? '💊 מתחילה חפיסה מחוברת (בלי הפסקה)'
+          : '💊 מתחילה חפיסה חדשה'
+    desired.set(`${s.kind}:${s.start}`, { title, due: s.start })
+  }
+  const map = { ...(data.pillTasks ?? {}) }
+  for (const [key, want] of desired) {
+    const task = map[key] ? data.tasks[map[key]] : undefined
+    if (!task || task.deleted_at === PURGED) map[key] = addTask(want).id
+    else if (task.title !== want.title && !task.done) updateTask(task.id, { title: want.title })
+  }
+  for (const key of Object.keys(map)) {
+    if (desired.has(key)) continue
+    const date = key.split(':')[1]
+    const task = data.tasks[map[key]]
+    if (date >= t) {
+      if (task && !task.done && !task.deleted) deleteTask(task.id) // התוכנית השתנתה
+      delete map[key]
+    } else if (date < addDays(t, -7)) delete map[key]
+  }
+  if (JSON.stringify(map) !== JSON.stringify(data.pillTasks ?? {})) {
+    data.pillTasks = map
+    save()
+  }
 }
 
 // ---------- תזכורות לקביעת תור ----------
@@ -559,7 +623,7 @@ export function rollover() {
   const t = today()
   let changed = false
   // משימות של תורים נשארות ביום שלהן – התור קרה (או לא) באותו יום
-  const appointments = new Set(Object.values(data.notes).map((n) => n.task_id).filter(Boolean))
+  const appointments = new Set([...Object.values(data.notes).map((n) => n.task_id), ...Object.values(data.pillTasks ?? {})].filter(Boolean))
   for (const task of Object.values(data.tasks)) {
     if (task.done || task.deleted || !task.due || task.due >= t || appointments.has(task.id)) continue
     data.tasks[task.id] = { ...task, due: t, postponed: (task.postponed ?? 0) + diffDays(task.due, t), updated_at: now() }
@@ -574,6 +638,7 @@ export function rollover() {
   }
   if (changed || dayChanged) emit() // גם בלי שינוי – כדי ש"היום" במסך יתעדכן
   syncBookingReminders() // יום חדש – אולי הגיע הזמן להזכיר לקבוע תור
+  syncPillTasks()
 }
 
 function scheduleMidnight() {

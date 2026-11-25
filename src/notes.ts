@@ -20,6 +20,7 @@ export const BOARDS: BoardMeta[] = [
   { id: 'refunds', label: 'החזרים', emoji: '💸', statuses: ['ביקשתי', 'אושר', 'התקבל בבנק'], doneTitle: 'התקבלו', titleLabel: 'ממי (חנות / חברה)' },
   { id: 'hair', label: 'שיער', emoji: '💇‍♀️', titleLabel: 'סוג הטיפול' },
   { id: 'lashes', label: 'ריסים', emoji: '👁️', titleLabel: 'סוג הטיפול' },
+  { id: 'pills', label: 'גלולות', emoji: '💊', titleLabel: 'חפיסה' },
 ]
 
 export const boardMeta = (b: Board): BoardMeta => BOARDS.find((x) => x.id === b)!

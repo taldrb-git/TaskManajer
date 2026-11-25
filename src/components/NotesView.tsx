@@ -2,7 +2,8 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { fullDateLabel, today } from '../dates'
 import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, TrashIcon } from '../icons'
 import { BOARDS, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
-import { addNote, deleteNote, setBookingInterval, setBookingLead, updateNote } from '../store'
+import { addNote, connectPack, deleteNote, disconnectPack, setBookingInterval, setBookingLead, updateNote } from '../store'
+import { BREAK_DAYS, MAX_CHAIN, PILL_DAYS, packStarts, pillState, timeline, upcomingBreaks } from '../pills'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
 import { useSwipeDelete } from './useSwipeDelete'
@@ -11,7 +12,7 @@ import { useSwipeDelete } from './useSwipeDelete'
 
 /** כרטיס לכל לוח, עם שורת סיכום קצרה */
 export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; notes: Note[]; prefs: BookingPrefs; onOpen: (b: Board) => void }) {
-  const summary = (b: Board): string | { hot: string; bell?: boolean } => {
+  const summary = (b: Board): string | { hot: string; bell?: boolean; moon?: boolean } => {
     if (b === 'someday') {
       const n = tasks.filter((t) => !t.done && !t.due).length
       return n === 1 ? 'רעיון אחד' : n ? `${n} רעיונות` : 'ריק'
@@ -23,6 +24,12 @@ export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; note
       if (!open.length) return items.length ? 'הכול הגיע' : 'ריק'
       const onWay = open.filter((n) => n.status === 1).length
       return onWay ? `${open.length} ממתינות · ${onWay} בדרך` : `${open.length} ממתינות`
+    }
+    if (b === 'pills') {
+      const s = pillState(notes)
+      if (!s) return packStarts(notes).length ? 'החפיסה עוד לא התחילה' : 'ריק'
+      if (s.current.kind === 'break') return { hot: `הפסקה · חפיסה חדשה ${agoLabel(s.next!.start)}`, moon: true }
+      return s.next?.kind === 'break' ? `כדור ${s.day}/${s.length} · הפסקה ${agoLabel(s.next.start)}` : `כדור ${s.day}/${s.length} · מחוברת לחפיסה הבאה`
     }
     if (b === 'refunds') {
       if (!open.length) return items.length ? 'הכול התקבל' : 'ריק'
@@ -57,11 +64,11 @@ export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; note
   )
 }
 
-function BoardSummary({ value }: { value: string | { hot: string; bell?: boolean } }) {
+function BoardSummary({ value }: { value: string | { hot: string; bell?: boolean; moon?: boolean } }) {
   if (typeof value === 'string') return <span>{value}</span>
   return (
-    <span className={`hot${value.bell ? ' bell' : ''}`}>
-      {value.bell ? <BellIcon width={13} height={13} /> : <CalendarIcon width={13} height={13} />} {value.hot}
+    <span className={`hot${value.bell ? ' bell' : ''}${value.moon ? ' moon' : ''}`}>
+      {value.moon ? '🌙' : value.bell ? <BellIcon width={13} height={13} /> : <CalendarIcon width={13} height={13} />} {value.hot}
     </span>
   )
 }
@@ -87,6 +94,7 @@ export function NoteBoardView({ board, notes, prefs, onEdit, onAdd, onDelete, to
   const meta = boardMeta(board)
   const items = notesOf(notes, board)
 
+  if (board === 'pills') return <PillsBoard notes={notes} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
   if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} prefs={prefs} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} />
 
   const open = items.filter((n) => n.status < 2)
@@ -300,6 +308,139 @@ function TreatmentRow({ note, onEdit, onDelete }: { note: Note; onEdit: (n: Note
   )
 }
 
+// ---------- גלולות ----------
+
+const dayMonth = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'short' })
+/** "5–11 בדצמ׳", "30 בינו׳ – 5 בפבר׳" (בלי שנה – התחזית היא לחודשים הקרובים) */
+const rangeLabel = (a: string, b: string) => {
+  const fa = dayMonth.format(new Date(a + 'T12:00'))
+  const fb = dayMonth.format(new Date(b + 'T12:00'))
+  return a.slice(0, 7) === b.slice(0, 7) ? `${Number(a.slice(8))}–${fb}` : `${fa} – ${fb}`
+}
+
+function PillsBoard({ notes, onAdd, onEdit, onDelete }: { notes: Note[]; onAdd: (p: Partial<Note>) => void; onEdit: (n: Note) => void; onDelete: (n: Note) => void }) {
+  const packs = packStarts(notes)
+  const s = pillState(notes)
+
+  if (!packs.length) {
+    return (
+      <div className="empty">
+        <div className="empty-emoji" aria-hidden="true">
+          💊
+        </div>
+        <h3>גלולות</h3>
+        <p>
+          {PILL_DAYS} כדורים ו-{BREAK_DAYS} ימי הפסקה. מספיק לרשום מתי התחלת את החפיסה הנוכחית – משם הכול מחושב לבד.
+        </p>
+        <button className="btn primary" style={{ marginTop: 16 }} onClick={() => onAdd({ title: 'חפיסה', date: today() })}>
+          מתי התחלתי את החפיסה?
+        </button>
+      </div>
+    )
+  }
+
+  const breaks = upcomingBreaks(notes, 8)
+  const history = timeline(notes, today()).filter((x) => x.kind === 'pack' && !x.projected && x.start <= today()).reverse()
+  const overChain = s && s.current.kind === 'pack' && s.current.chain > MAX_CHAIN
+
+  return (
+    <>
+      {s ? (
+        <div className={`pill-card${s.current.kind === 'break' ? ' on-break' : ''}`}>
+          <span className="next-label">{s.current.kind === 'break' ? '🌙 הפסקה' : s.current.chain > 1 ? `💊 חפיסה ${s.current.chain} ברצף` : '💊 חפיסה'}</span>
+          <b>
+            {s.current.kind === 'break' ? `יום ${s.day} מתוך ${s.length}` : `כדור ${s.day} מתוך ${s.length}`}
+          </b>
+          <div className="pill-track" aria-hidden="true">
+            {Array.from({ length: s.length }, (_, i) => (
+              <i key={i} className={i < s.day ? 'on' : ''} />
+            ))}
+          </div>
+          {s.next && (
+            <span className="next-when">
+              {s.next.kind === 'break'
+                ? `הפסקה מתחילה ${fullDateLabel(s.next.start).replace(/^(היום|מחר) · /, '')} · ${agoLabel(s.next.start)}`
+                : s.current.kind === 'break'
+                  ? `חפיסה חדשה ${fullDateLabel(s.next.start).replace(/^(היום|מחר) · /, '')} · ${agoLabel(s.next.start)}`
+                  : `מחוברת: החפיסה הבאה מתחילה מיד, ${fullDateLabel(s.next.start).replace(/^(היום|מחר) · /, '')}`}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="pill-card">
+          <span className="next-label">💊 חפיסה</span>
+          <b>מתחילה {agoLabel(packs[0].date!)}</b>
+        </div>
+      )}
+
+      {overChain && <p className="pill-warn">⚠️ חיברת כבר {s!.current.chain} חפיסות ברצף – יותר מ-{MAX_CHAIN}. אחרי החפיסה הזו צריך הפסקה.</p>}
+
+      {s?.current.kind === 'pack' && (
+        <div className="pill-actions">
+          {s.connected ? (
+            <button className="btn small" onClick={disconnectPack}>
+              ביטול החיבור – לעשות הפסקה
+            </button>
+          ) : s.canConnect ? (
+            <button className="btn small" onClick={connectPack}>
+              לחבר חפיסה (בלי הפסקה)
+            </button>
+          ) : (
+            <span className="hint">
+              זו החפיסה ה-{s.current.chain} ברצף – אחריה הפסקה (מקסימום {MAX_CHAIN})
+            </span>
+          )}
+        </div>
+      )}
+
+      <section className="stats-card pill-forecast">
+        <h2>ההפסקות הבאות</h2>
+        <ul>
+          {breaks.map((b) => (
+            <li key={b.start}>
+              <span>{rangeLabel(b.start, b.end)}</span>
+              <span className="muted">{b.start <= today() ? 'עכשיו' : agoLabel(b.start)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="hint">התחזית מניחה הפסקה אחרי כל חפיסה. חיבור חפיסות מעדכן אותה.</p>
+      </section>
+
+      <h2 className="section-title">
+        חפיסות שהתחילו <span className="muted">{history.length}</span>
+      </h2>
+      <ul className="notes">
+        {history.map((p) => {
+          const note = notes.find((n) => n.id === p.noteId)
+          return note ? (
+            <PillRow key={p.start} seg={p} note={note} onEdit={onEdit} onDelete={onDelete} />
+          ) : null
+        })}
+      </ul>
+      <p className="hint">החפיסות הבאות נרשמות לבד. אם התחלת חפיסה בתאריך אחר מהמתוכנן, לחצי על + ורשמי את התאריך.</p>
+    </>
+  )
+}
+
+function PillRow({ seg, note, onEdit, onDelete }: { seg: { start: string; end: string; chain: number }; note: Note; onEdit: (n: Note) => void; onDelete: (n: Note) => void }) {
+  const swipe = useSwipeDelete(() => onDelete(note))
+  return (
+    <li className={`note${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
+      {swipe.bg}
+      <div className="note-row" style={swipe.rowStyle}>
+        <button className="note-body" onClick={() => onEdit(note)}>
+          <span className="note-title">{seg.chain > 1 ? `חפיסה מחוברת (${seg.chain} ברצף)` : 'חפיסה'}</span>
+          <span className="note-meta">{rangeLabel(seg.start, seg.end)}</span>
+        </button>
+        <span className="note-date">
+          {shortDateLabel(seg.start)}
+          <span className="muted">{agoLabel(seg.start)}</span>
+        </span>
+      </div>
+    </li>
+  )
+}
+
 // ---------- הגדרות תזכורות ללוח תורים ----------
 
 function BookingSettings({ board, notes, prefs, onClose }: { board: TreatmentBoard; notes: Note[]; prefs: BookingPrefs; onClose: () => void }) {
@@ -383,6 +524,7 @@ const EMPTY: Record<NoteBoard, string> = {
   refunds: 'כסף שאמור לחזור אלייך – עד שרואים את הזיכוי בבנק.',
   hair: 'מתי היה התור האחרון לגוונים, לתלתלים או לתספורת.',
   lashes: 'מתי היה התור האחרון להרמת ריסים.',
+  pills: '',
 }
 
 function BoardEmpty({ board }: { board: NoteBoard }) {
@@ -414,7 +556,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
   const meta = boardMeta(board)
   const t = today()
   const [f, setF] = useState(() => ({
-    title: note?.title ?? preset?.title ?? '',
+    title: note?.title ?? preset?.title ?? (board === 'pills' ? 'חפיסה' : ''),
     source: note?.source ?? '',
     tracking: note?.tracking ?? '',
     amount: note?.amount !== null && note?.amount !== undefined ? String(note.amount) : '',
@@ -428,7 +570,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
   const save = (e?: FormEvent) => {
     e?.preventDefault()
     const title = f.title.trim()
-    if (!title) return
+    if (!title || (board === 'pills' && !f.date)) return
     const amount = f.amount.trim() ? Number(f.amount.replace(/[^\d.]/g, '')) : null
     const fields = {
       title,
@@ -473,6 +615,13 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
       }
     >
       <form className="note-form" onSubmit={save}>
+        {board === 'pills' ? (
+          <label className="field">
+            <span className="label">היום של הכדור הראשון בחפיסה</span>
+            <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+            <span className="hint">מכאן הכול מחושב: {PILL_DAYS} ימי כדורים, {BREAK_DAYS} ימי הפסקה, וחוזר.</span>
+          </label>
+        ) : (
         <label className="field">
           <span className="label">{meta.titleLabel}</span>
           <input
@@ -484,6 +633,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
             placeholder={board === 'packages' ? 'למשל: עלי אקספרס, שיין, אמזון' : undefined}
           />
         </label>
+        )}
 
         {types.length > 0 && (
           <div className="chips">
@@ -530,7 +680,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
             {f.date >= today() && <span className="hint">תור עתידי נכנס גם ללוח השנה, ומתעדכן שם כשמשנים אותו כאן.</span>}
           </>
         ) : (
-          board !== 'shopping' && (
+          board !== 'shopping' && board !== 'pills' && (
             <label className="field">
               <span className="label">{board === 'packages' ? 'תאריך ההזמנה' : 'מתי ביקשתי'}</span>
               <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
@@ -551,7 +701,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
           </div>
         )}
 
-        {board !== 'shopping' && (
+        {board !== 'shopping' && board !== 'pills' && (
           <label className="field">
             <span className="label">הערות</span>
             <textarea className="notes" rows={2} value={f.notes} onChange={(e) => set({ notes: e.target.value })} />

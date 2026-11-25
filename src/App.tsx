@@ -8,6 +8,7 @@ import { StatsView } from './components/StatsView'
 import { TrashView } from './components/TrashView'
 import { NoteBoardView, NoteEditor, NotesHome } from './components/NotesView'
 import { boardMeta, isBoard } from './notes'
+import { breakDays } from './pills'
 import { hebrewDate, hebrewDateFull, holidayOn } from './holidays'
 import { checkReminders } from './reminders'
 import { toDateLabel, useDateDrag } from './components/useDateDrag'
@@ -147,6 +148,7 @@ export default function App() {
   }, [])
   const c = useMemo(() => counts(tasks), [tasks])
   const marks = useMemo(() => dayMarks(tasks), [tasks])
+  const breaks = useMemo(() => breakDays(notes), [notes])
 
   // בחירת יום בלוח השנה מחליפה את הכתובת בלי להוסיף צעד להיסטוריה
   const selectDay = useCallback((date: string) => {
@@ -316,11 +318,16 @@ export default function App() {
         <div className="content">
           {active.kind === 'calendar' && (
             <>
-              <Calendar selected={active.date} marks={marks} onSelect={selectDay} dropOver={dnd.over} />
+              <Calendar selected={active.date} marks={marks} onSelect={selectDay} dropOver={dnd.over} breaks={breaks} />
               <h2 className="day-title">
                 {fullDateLabel(active.date)}
                 <span className="heb-date">{hebrewDateFull(active.date)}</span>
                 {holidayOn(active.date) && <span className="holiday-chip">{holidayOn(active.date)}</span>}
+                {breaks.has(active.date) && (
+                  <span className="holiday-chip pill-chip">
+                    הפסקה · יום {breaks.get(active.date)!.day} מתוך {breaks.get(active.date)!.length}
+                  </span>
+                )}
               </h2>
             </>
           )}
@@ -386,7 +393,7 @@ export default function App() {
         <button
           className="fab"
           onClick={() => (noteBoard ? setNoteEdit({ board: noteBoard, note: null }) : setComposing(true))}
-          aria-label={noteBoard ? 'פריט חדש' : 'משימה חדשה'}
+          aria-label={noteBoard === 'pills' ? 'התחלתי חפיסה' : noteBoard ? 'פריט חדש' : 'משימה חדשה'}
         >
           <PlusIcon width={26} height={26} strokeWidth={2.5} />
         </button>
