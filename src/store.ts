@@ -7,14 +7,16 @@ import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import { addDays, diffDays, nextOccurrence, today } from './dates'
 import { supabase } from './supabase'
-import type { Priority, Repeat, Task, TaskList } from './types'
+import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
 
-type Table = 'tasks' | 'lists'
-type Row = Task | TaskList
+type Table = 'tasks' | 'lists' | 'notes'
+type Row = Task | TaskList | Note
+const TABLES: Table[] = ['lists', 'tasks', 'notes'] // רשימות קודם, כדי שמשימות שמפנות אליהן ייכנסו בלי בעיה
 
 interface Persisted {
   tasks: Record<string, Task>
   lists: Record<string, TaskList>
+  notes: Record<string, Note>
   dirty: Record<Table, string[]>
   cursor: Record<Table, string | null>
   userId: string | null
@@ -26,6 +28,7 @@ export interface Snapshot {
   tasks: Task[]
   trash: Task[] // נמחקו ב-30 הימים האחרונים, החדשות למעלה
   lists: TaskList[]
+  notes: Note[] // החדשים למעלה
   sync: SyncStatus
   syncError: string | null
   lastSynced: string | null
@@ -48,19 +51,42 @@ function normalizeTask(t: Task): Task {
   }
 }
 
+function normalizeNote(n: Note): Note {
+  return {
+    ...n,
+    status: n.status ?? 0,
+    amount: n.amount ?? null,
+    source: n.source ?? '',
+    tracking: n.tracking ?? '',
+    date: n.date ?? null,
+    notes: n.notes ?? '',
+  }
+}
+
 const TRASH_DAYS = 30
 const PURGED = '1970-01-01T00:00:00.000Z' // "נמחק לצמיתות" – מחוץ לטווח סל המחזור בכל המכשירים
 
 function emptyData(): Persisted {
-  return { tasks: {}, lists: {}, dirty: { tasks: [], lists: [] }, cursor: { tasks: null, lists: null }, userId: null }
+  return {
+    tasks: {},
+    lists: {},
+    notes: {},
+    dirty: { tasks: [], lists: [], notes: [] },
+    cursor: { tasks: null, lists: null, notes: null },
+    userId: null,
+  }
 }
 
 function load(): Persisted {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const d: Persisted = { ...emptyData(), ...JSON.parse(raw) }
-      for (const id of Object.keys(d.tasks)) d.tasks[id] = normalizeTask(d.tasks[id]) // נתונים מגרסה ישנה
+      const e = emptyData()
+      const p = JSON.parse(raw)
+      // נתונים מגרסה ישנה: משלימים טבלאות ושדות שנוספו
+      const d: Persisted = { ...e, ...p, dirty: { ...e.dirty, ...p.dirty }, cursor: { ...e.cursor, ...p.cursor } }
+      for (const id of Object.keys(d.tasks)) d.tasks[id] = normalizeTask(d.tasks[id])
+      for (const id of Object.keys(d.notes)) d.notes[id] = normalizeNote(d.notes[id])
       return d
     }
   } catch {
@@ -87,6 +113,9 @@ function rebuild() {
     lists: Object.values(data.lists)
       .filter((l) => !l.deleted)
       .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    notes: Object.values(data.notes)
+      .filter((n) => !n.deleted)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     sync,
     syncError,
     lastSynced,
@@ -146,8 +175,7 @@ const now = () => new Date().toISOString()
 // ---------- פעולות ----------
 
 function commit(table: Table, row: Row) {
-  if (table === 'tasks') data.tasks[row.id] = row as Task
-  else data.lists[row.id] = row as TaskList
+  store(table)[row.id] = row
   if (!data.dirty[table].includes(row.id)) data.dirty[table].push(row.id)
   save()
   emit()
@@ -312,11 +340,46 @@ export function duplicateTask(id: string, count: number, opts: { everyDays: numb
   }
 }
 
+// ---------- פתקים ----------
+
+export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'board' | 'created_at' | 'updated_at' | 'deleted'>>): Note {
+  const n: Note = normalizeNote({
+    id: uid(),
+    board,
+    title: (fields.title ?? '').trim(),
+    status: fields.status ?? 0,
+    amount: fields.amount ?? null,
+    source: fields.source ?? '',
+    tracking: fields.tracking ?? '',
+    date: fields.date ?? null,
+    notes: fields.notes ?? '',
+    created_at: now(),
+    updated_at: now(),
+    deleted: false,
+  })
+  commit('notes', n)
+  return n
+}
+
+export function updateNote(id: string, patch: Partial<Omit<Note, 'id' | 'board' | 'created_at'>>) {
+  const n = data.notes[id]
+  if (!n) return
+  commit('notes', { ...n, ...patch, updated_at: now() })
+}
+
+export function deleteNote(id: string) {
+  updateNote(id, { deleted: true })
+}
+
+export function restoreNote(id: string) {
+  updateNote(id, { deleted: false })
+}
+
 // ---------- גיבוי ----------
 
 export function exportJSON(): string {
   return JSON.stringify(
-    { app: 'task-manager', version: 1, exported_at: now(), tasks: snapshot.tasks, lists: snapshot.lists },
+    { app: 'task-manager', version: 1, exported_at: now(), tasks: snapshot.tasks, lists: snapshot.lists, notes: snapshot.notes },
     null,
     2,
   )
@@ -335,6 +398,12 @@ export function importJSON(text: string): number {
     if (!t?.id || typeof t.title !== 'string') continue
     data.tasks[t.id] = normalizeTask({ ...t, updated_at: now() })
     if (!data.dirty.tasks.includes(t.id)) data.dirty.tasks.push(t.id)
+    n++
+  }
+  for (const note of (Array.isArray(parsed.notes) ? parsed.notes : []) as Note[]) {
+    if (!note?.id || typeof note.title !== 'string' || !note.board) continue
+    data.notes[note.id] = normalizeNote({ ...note, updated_at: now() })
+    if (!data.dirty.notes.includes(note.id)) data.dirty.notes.push(note.id)
     n++
   }
   save()
@@ -386,16 +455,19 @@ const COLUMNS: Record<Table, string[]> = {
     'time', 'remind', 'repeat', 'subtasks', 'created_at', 'updated_at', 'deleted', 'deleted_at',
   ],
   lists: ['id', 'name', 'color', 'created_at', 'updated_at', 'deleted'],
+  notes: ['id', 'board', 'title', 'status', 'amount', 'source', 'tracking', 'date', 'notes', 'created_at', 'updated_at', 'deleted'],
 }
 
 function pick(row: Record<string, unknown>, table: Table): Row {
   const out: Record<string, unknown> = {}
   for (const c of COLUMNS[table]) out[c] = row[c]
-  return table === 'tasks' ? normalizeTask(out as unknown as Task) : (out as unknown as Row)
+  if (table === 'tasks') return normalizeTask(out as unknown as Task)
+  if (table === 'notes') return normalizeNote(out as unknown as Note)
+  return out as unknown as Row
 }
 
 function store(table: Table): Record<string, Row> {
-  return table === 'tasks' ? data.tasks : data.lists
+  return (table === 'tasks' ? data.tasks : table === 'lists' ? data.lists : data.notes) as Record<string, Row>
 }
 
 async function push(table: Table, userId: string) {
@@ -459,11 +531,8 @@ export async function syncNow() {
   syncing = true
   setSync('syncing')
   try {
-    // רשימות קודם, כדי שמשימות שמפנות אליהן ייכנסו בלי בעיה
-    await push('lists', userId)
-    await push('tasks', userId)
-    await pull('lists')
-    await pull('tasks')
+    for (const t of TABLES) await push(t, userId)
+    for (const t of TABLES) await pull(t)
     rollover() // משימות שהגיעו ממכשיר שעוד לא גלגל אותן
     lastSynced = now()
     setSync('synced')
@@ -494,6 +563,7 @@ function subscribeRealtime(userId: string) {
     .channel(`user-${userId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${userId}` }, () => scheduleSync(300))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'lists', filter: `user_id=eq.${userId}` }, () => scheduleSync(300))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${userId}` }, () => scheduleSync(300))
     .subscribe()
 }
 

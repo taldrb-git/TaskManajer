@@ -38,6 +38,32 @@ export interface TaskList {
   deleted: boolean
 }
 
+/** לוחות במסך "פתקים". "יום אחד" = משימות בלי תאריך; השאר = פתקים (Note) */
+export type Board = 'someday' | 'shopping' | 'packages' | 'refunds' | 'hair'
+export type NoteBoard = Exclude<Board, 'someday'>
+
+/**
+ * פריט בלוח פתקים. השדות משמשים לפי הלוח:
+ * - shopping: title, status (0 = לקנות, 2 = נקנה)
+ * - packages: title (מה), source (מאיפה), tracking, date (הגעה משוערת), status 0 הוזמנה / 1 בדרך / 2 הגיעה
+ * - refunds: title (ממי), amount, date (מתי ביקשתי), status 0 ביקשתי / 1 אושר / 2 התקבל בבנק
+ * - hair: title (סוג הטיפול, למשל "גוונים"), date (תאריך התור)
+ */
+export interface Note {
+  id: string
+  board: NoteBoard
+  title: string
+  status: number // 0..2. 2 = הסתיים
+  amount: number | null
+  source: string
+  tracking: string
+  date: string | null // YYYY-MM-DD
+  notes: string
+  created_at: string
+  updated_at: string
+  deleted: boolean
+}
+
 export type View =
   | { kind: 'today' }
   | { kind: 'upcoming' }
@@ -48,3 +74,4 @@ export type View =
   | { kind: 'search'; q: string }
   | { kind: 'stats' }
   | { kind: 'trash' }
+  | { kind: 'notes'; board: Board | null } // null = מסך הלוחות

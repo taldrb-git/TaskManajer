@@ -6,21 +6,27 @@ import { Calendar } from './components/Calendar'
 import { Composer } from './components/Composer'
 import { StatsView } from './components/StatsView'
 import { TrashView } from './components/TrashView'
+import { NoteBoardView, NoteEditor, NotesHome } from './components/NotesView'
+import { boardMeta, isBoard } from './notes'
 import { hebrewDate, hebrewDateFull, holidayOn } from './holidays'
 import { checkReminders } from './reminders'
 import { toDateLabel, useDateDrag } from './components/useDateDrag'
 import { fullDateLabel, nextOccurrence, today } from './dates'
-import { CalendarIcon, ChartIcon, CheckCircleIcon, ChevronIcon, CloudIcon, GridCalendarIcon, InboxIcon, MenuIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon, TrashIcon, XIcon } from './icons'
+import { ChartIcon, CheckCircleIcon, ChevronIcon, CloudIcon, GridCalendarIcon, MenuIcon, NoteIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon, TrashIcon, XIcon } from './icons'
 import { counts, dayMarks, sectionsFor, viewTitle } from './logic'
-import { addList, deleteList, deleteTask, postponeTask, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
+import { addList, deleteList, deleteTask, postponeTask, restoreNote, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
 import { supabase } from './supabase'
-import type { Task, View } from './types'
+import type { Note, NoteBoard, Task, View } from './types'
 
 // ---------- ניתוב לפי hash (עובד גם ב-GitHub Pages) ----------
 
 function parseHash(): View {
   const h = location.hash.replace(/^#\/?/, '')
   if (h.startsWith('list/')) return { kind: 'list', id: decodeURIComponent(h.slice(5)) }
+  if (h === 'notes' || h.startsWith('notes/')) {
+    const b = h.slice(6)
+    return { kind: 'notes', board: isBoard(b) ? b : null }
+  }
   if (h === 'calendar' || h.startsWith('calendar/')) {
     const d = h.slice(9)
     return { kind: 'calendar', date: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : today() }
@@ -33,6 +39,7 @@ function parseHash(): View {
 function viewHash(v: View): string {
   if (v.kind === 'list') return `#/list/${encodeURIComponent(v.id)}`
   if (v.kind === 'calendar') return `#/calendar/${v.date}`
+  if (v.kind === 'notes') return v.board ? `#/notes/${v.board}` : '#/notes'
   return `#/${v.kind}`
 }
 
@@ -96,12 +103,14 @@ function useToasts() {
 // ---------- האפליקציה ----------
 
 export default function App() {
-  const { tasks, trash, lists, sync, user } = useStore()
+  const { tasks, trash, lists, notes, sync, user } = useStore()
   const [view, setViewState] = useState<View>(parseHash)
   const [query, setQuery] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [composing, setComposing] = useState(false)
+  // עריכת פתק: note = null → פריט חדש
+  const [noteEdit, setNoteEdit] = useState<{ board: NoteBoard; note: Note | null } | null>(null)
   const [drawer, setDrawer] = useState(false)
   const { canInstall, install } = useInstallPrompt()
   const { toast, show, dismiss } = useToasts()
@@ -181,6 +190,9 @@ export default function App() {
   })
   const canDrag = active.kind === 'calendar' || active.kind === 'upcoming'
 
+  const onNoteDeleted = (n: Note) => show('הפריט נמחק', { label: 'ביטול', run: () => restoreNote(n.id) })
+  const noteBoard: NoteBoard | null = active.kind === 'notes' && active.board && active.board !== 'someday' ? active.board : null
+
   const closeEditor = useCallback(() => setEditing(null), [])
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
   const openSettings = () => {
@@ -194,12 +206,11 @@ export default function App() {
         <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={28} height={28} />
         <span>משימות</span>
       </div>
-      <NavItem icon={<SunIcon />} label="היום" count={c.today} danger={c.overdue > 0} active={active.kind === 'today'} onClick={() => go({ kind: 'today' })} />
-      <NavItem icon={<CalendarIcon />} label="בקרוב" count={c.upcoming} active={active.kind === 'upcoming'} onClick={() => go({ kind: 'upcoming' })} />
       <NavItem icon={<GridCalendarIcon />} label="לוח שנה" active={active.kind === 'calendar'} onClick={() => go({ kind: 'calendar', date: today() })} />
-      <NavItem icon={<InboxIcon />} label="כל המשימות" count={c.all} active={active.kind === 'all'} onClick={() => go({ kind: 'all' })} />
-      <NavItem icon={<CheckCircleIcon />} label="הושלמו" active={active.kind === 'done'} onClick={() => go({ kind: 'done' })} />
+      <NavItem icon={<SunIcon />} label="היום" count={c.today} danger={c.overdue > 0} active={active.kind === 'today'} onClick={() => go({ kind: 'today' })} />
+      <NavItem icon={<NoteIcon />} label="פתקים" active={active.kind === 'notes'} onClick={() => go({ kind: 'notes', board: null })} />
       <NavItem icon={<ChartIcon />} label="סיכום" active={active.kind === 'stats'} onClick={() => go({ kind: 'stats' })} />
+      <NavItem icon={<CheckCircleIcon />} label="הושלמו" active={active.kind === 'done'} onClick={() => go({ kind: 'done' })} />
 
       <div className="nav-head">רשימות</div>
       {lists.map((l) => (
@@ -257,8 +268,14 @@ export default function App() {
               <button className="icon-btn mobile-only" onClick={() => setDrawer(true)} aria-label="תפריט">
                 <MenuIcon />
               </button>
+              {active.kind === 'notes' && active.board && (
+                <button className="icon-btn" onClick={() => go({ kind: 'notes', board: null })} aria-label="חזרה לפתקים">
+                  <ChevronIcon className="flip" />
+                </button>
+              )}
               <div className="titles">
                 <h1>
+                  {active.kind === 'notes' && active.board && <span aria-hidden="true">{boardMeta(active.board).emoji}</span>}
                   {active.kind === 'list' && <i className="dot big" style={{ background: listById[active.id]?.color }} />}
                   {title}
                 </h1>
@@ -312,6 +329,10 @@ export default function App() {
             <StatsView tasks={tasks} onOpen={(x) => setEditing(x.id)} />
           ) : active.kind === 'trash' ? (
             <TrashView trash={trash} toast={(m) => show(m)} />
+          ) : active.kind === 'notes' && !active.board ? (
+            <NotesHome tasks={tasks} notes={notes} onOpen={(b) => go({ kind: 'notes', board: b })} />
+          ) : noteBoard ? (
+            <NoteBoardView board={noteBoard} notes={notes} onEdit={(n) => setNoteEdit({ board: noteBoard, note: n })} toast={(m) => show(m)} />
           ) : sections.every((s) => !s.tasks.length) ? (
             <Empty view={active} />
           ) : (
@@ -343,21 +364,28 @@ export default function App() {
       </main>
 
       <nav className="bottombar" aria-label="ניווט מהיר">
-        <TabBtn icon={<SunIcon />} label="היום" badge={c.today} danger={c.overdue > 0} active={active.kind === 'today'} onClick={() => go({ kind: 'today' })} />
-        <TabBtn icon={<CalendarIcon />} label="בקרוב" active={active.kind === 'upcoming'} onClick={() => go({ kind: 'upcoming' })} />
         <TabBtn icon={<GridCalendarIcon />} label="לוח שנה" active={active.kind === 'calendar'} onClick={() => go({ kind: 'calendar', date: today() })} />
-        <TabBtn icon={<InboxIcon />} label="הכול" active={active.kind === 'all'} onClick={() => go({ kind: 'all' })} />
+        <TabBtn icon={<SunIcon />} label="היום" badge={c.today} danger={c.overdue > 0} active={active.kind === 'today'} onClick={() => go({ kind: 'today' })} />
+        <TabBtn icon={<NoteIcon />} label="פתקים" active={active.kind === 'notes'} onClick={() => go({ kind: 'notes', board: null })} />
+        <TabBtn icon={<ChartIcon />} label="סיכום" active={active.kind === 'stats'} onClick={() => go({ kind: 'stats' })} />
         <TabBtn icon={<MenuIcon />} label="רשימות" active={active.kind === 'list' || active.kind === 'done'} onClick={() => setDrawer(true)} />
       </nav>
 
-      {!['done', 'search', 'stats', 'trash'].includes(active.kind) && !composing && (
-        <button className="fab" onClick={() => setComposing(true)} aria-label="משימה חדשה">
+      {!['done', 'search', 'stats', 'trash'].includes(active.kind) && !(active.kind === 'notes' && !active.board) && !composing && !noteEdit && (
+        <button
+          className="fab"
+          onClick={() => (noteBoard ? setNoteEdit({ board: noteBoard, note: null }) : setComposing(true))}
+          aria-label={noteBoard ? 'פריט חדש' : 'משימה חדשה'}
+        >
           <PlusIcon width={26} height={26} strokeWidth={2.5} />
         </button>
       )}
       {dnd.ghost}
       {composing && <Composer view={active} lists={lists} onClose={() => setComposing(false)} />}
 
+      {noteEdit && (
+        <NoteEditor board={noteEdit.board} note={noteEdit.note} notes={notes} onClose={() => setNoteEdit(null)} onDeleted={onNoteDeleted} />
+      )}
       {editing && (
         <TaskEditor
           taskId={editing}
@@ -538,6 +566,7 @@ function Empty({ view }: { view: View }) {
     search: ['לא נמצאו משימות', 'נסו מילת חיפוש אחרת.'],
     stats: ['', ''],
     trash: ['', ''],
+    notes: ['אין רעיונות כרגע', 'דברים שרוצים לעשות "מתישהו", בלי תאריך. כשמחליטים על יום – נותנים תאריך והמשימה עוברת ללוח השנה.'],
   }
   const [h, p] = view.kind === 'search' && !view.q.trim() ? ['חיפוש', 'הקלידו כדי לחפש בכותרות ובהערות.'] : text[view.kind]
   return (

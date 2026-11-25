@@ -1,4 +1,5 @@
 import { addDays, toISODate, today } from './dates'
+import { boardMeta } from './notes'
 import type { Priority, Repeat, Task, TaskList, View } from './types'
 
 export const PRIORITY_LABEL: Record<Priority, string> = { 0: 'ללא', 1: 'נמוכה', 2: 'בינונית', 3: 'גבוהה' }
@@ -65,6 +66,8 @@ export function viewTitle(view: View, lists: TaskList[]): string {
       return 'סיכום'
     case 'trash':
       return 'סל מחזור'
+    case 'notes':
+      return view.board ? boardMeta(view.board).label : 'פתקים'
   }
 }
 
@@ -112,6 +115,13 @@ export function sectionsFor(view: View, all: Task[], dateLabel: (iso: string) =>
       return [
         { key: 'open', tasks: open.filter((x) => x.list_id === view.id) },
         { key: 'done', title: 'הושלמו', tasks: doneSorted.filter((x) => x.list_id === view.id), collapsible: true },
+      ].filter((s, i) => i === 0 || s.tasks.length)
+    case 'notes':
+      // "יום אחד" = משימות בלי תאריך. שאר הלוחות מוצגים ב-NotesView
+      if (view.board !== 'someday') return []
+      return [
+        { key: 'open', tasks: open.filter((x) => !x.due) },
+        { key: 'done', title: 'הושלמו', tasks: doneSorted.filter((x) => !x.due), collapsible: true },
       ].filter((s, i) => i === 0 || s.tasks.length)
     case 'stats':
     case 'trash':

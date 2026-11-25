@@ -37,11 +37,12 @@
 src/
   main.tsx              נקודת כניסה, רישום service worker
   App.tsx               שלד, ניווט, כפתור + צף, הודעות, תפריט רשימה
-  store.ts              מצב הנתונים, פעולות (add/update/toggle/postpone/delete/restore/purge/duplicate), סל מחזור, גלגול בחצות (rollover), סנכרון, התחברות
+  store.ts              מצב הנתונים, פעולות (add/update/toggle/postpone/delete/restore/purge/duplicate, addNote/updateNote/deleteNote/restoreNote), סל מחזור, גלגול בחצות (rollover), סנכרון, התחברות
   supabase.ts           לקוח Supabase, או null אם אין משתני סביבה
   logic.ts              מיון, חלוקה למקטעים לפי מסך, ספירות, סימוני ימים ללוח (dayMarks), פענוח הוספה מהירה ותאריכים (parseQuickAdd)
   dates.ts              תאריכים מקומיים (YYYY-MM-DD), הפרש ימים (diffDays), המופע הבא של משימה חוזרת (nextOccurrence), תוויות בעברית
-  types.ts              Task, TaskList, View
+  types.ts              Task, TaskList, Note, Board, View
+  notes.ts              הגדרות הלוחות של "פתקים" (BOARDS), תוויות זמן (agoLabel, shortDateLabel), סכום ממתין (pendingRefunds), התור האחרון בשיער (lastHair)
   accent.ts             צבע ההדגשה: רשימת הצבעים, applyAccent, useAccent
   holidays.ts           חגים ותאריך עברי מ-Intl (calendar: hebrew): holidayOn, hebrewDate, hebrewDateFull, gematria
   reminders.ts          תזכורות מקומיות: הרשאה, reminderAt, checkReminders
@@ -52,6 +53,7 @@ src/
     TaskItem.tsx        שורת משימה: שעה, חזרה, תזכורת, תת-משימות, ימי דחייה (postponedLabel/doneAfterLabel), והחלקה
     StatsView.tsx       מסך סיכום: אריחי מספרים, גרף עמודות של 7 ימים, הכי נדחו
     TrashView.tsx       סל מחזור
+    NotesView.tsx       פתקים: מסך הלוחות (NotesHome), לוח (NoteBoardView, HairBoard), חלון הוספה ועריכה (NoteEditor)
     Composer.tsx        חלונית הוספת משימה שנפתחת מכפתור ה-+, עם כפתור מיקרופון
     useDateDrag.tsx     גרירת משימה אל תאריך (עכבר ומגע), תצוגה צפה בזמן גרירה
     TaskEditor.tsx      חלון עריכה: שעה, תזכורת, חזרה, תת-משימות (Subtasks), ומצב שכפול (DuplicateBody) באותו חלון
@@ -83,15 +85,36 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 | `subtasks` | jsonb | `[{ id, title, done }]` |
 | `deleted_at` | timestamptz / null | זמן המחיקה, בשביל סל המחזור. `1970-01-01` מסמן מחיקה לצמיתות |
 
-כל רשומה שנטענת (מ-localStorage, מגיבוי או מהשרת) עוברת `normalizeTask`, שמשלים שדות חסרים מגרסאות ישנות.
 | `created_at`, `updated_at` | timestamptz | `updated_at` נקבע בלקוח ומשמש להכרעה בהתנגשויות |
 | `deleted` | bool | מחיקה רכה |
 | `user_id` | uuid | בשרת בלבד |
 | `server_updated_at` | timestamptz | בשרת בלבד. נקבע ב-trigger ומשמש כסמן לסנכרון |
 
+כל רשומה שנטענת (מ-localStorage, מגיבוי או מהשרת) עוברת `normalizeTask`, שמשלים שדות חסרים מגרסאות ישנות.
+
 ### TaskList
 
 השדות: `id`, `name`, `color`, `created_at`, `updated_at`, `deleted`. בשרת נוספים גם `user_id` ו-`server_updated_at`.
+
+### Note (פתקים)
+
+טבלה אחת לכל הלוחות, עם שדה `board`. כל לוח משתמש רק בחלק מהשדות:
+
+| שדה | טיפוס | shopping | packages | refunds | hair |
+|---|---|---|---|---|---|
+| `title` | text | מה לקנות | מה הוזמן | ממי | סוג הטיפול |
+| `status` | 0–2 | 0 / 2 (נקנה) | הוזמנה / בדרך / הגיעה | ביקשתי / אושר / התקבל בבנק | – |
+| `source` | text | – | מאיפה | – | – |
+| `tracking` | text | – | מספר מעקב | – | – |
+| `amount` | numeric / null | – | – | סכום ב-₪ | – |
+| `date` | date / null | – | הגעה משוערת | מתי ביקשתי | תאריך התור |
+| `notes` | text | – | הערות | הערות | הערות |
+
+ועוד `id`, `created_at`, `updated_at`, `deleted` (מחיקה רכה, בלי סל מחזור – רק **ביטול** בהודעה). רשומות עוברות `normalizeNote`.
+
+- **"יום אחד"** הוא לא `Note`: אלה משימות עם `due = null`, ומוצגות דרך `sectionsFor` עם `{ kind: 'notes', board: 'someday' }`. ככה מקבלים בחינם החלקות, עריכה ומעבר ללוח השנה כשנותנים תאריך.
+- **ניתוב:** `#/notes` למסך הלוחות, `#/notes/<board>` ללוח. כפתור ה-+ בלוח של פתקים פותח את `NoteEditor` במקום ה-Composer.
+- **שיער:** `lastHair` מחזיר לכל סוג טיפול (לפי `title`) את התאריך האחרון שעבר. `agoLabel` מתרגם להפרש: ימים עד שבועיים, שבועות עד חודשיים, ואז חודשים ושנים.
 
 ## פענוח הוספה מהירה (`parseQuickAdd`)
 
@@ -157,7 +180,7 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 
 ## גרירה לתאריך (`useDateDrag`)
 
-- **יעדי שחרור:** כל אלמנט עם `data-date="YYYY-MM-DD"`. כרגע אלה ימים בלוח השנה (`.cal-day`) וקבוצות תאריך במסך "בקרוב" (`.section`).
+- **יעדי שחרור:** כל אלמנט עם `data-date="YYYY-MM-DD"`. כרגע אלה ימים בלוח השנה (`.cal-day`) וקבוצות תאריך במסך "בקרוב" (`.section`; המסך קיים בכתובת `#/upcoming` אבל כבר לא מופיע בניווט).
   היעד מזוהה בעזרת `elementFromPoint` ו-`closest('[data-date]')`. לתצוגה הצפה יש `pointer-events: none`, כדי שלא תסתיר את היעד.
 - **עכבר:** הגרירה מתחילה אחרי תזוזה של 6px.
 - **מגע:** הגרירה מתחילה אחרי לחיצה ארוכה של 350ms. אם האצבע זזה יותר מ-8px לפני כן, זו גלילה והגרירה מתבטלת.
@@ -255,7 +278,7 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 4. תזמון סנכרון 700ms אחר כך. שינויים קרובים מצטברים לסנכרון אחד.
 
 **סבב סנכרון (`syncNow`):**
-1. **push:** שליחת הרשימות ואז המשימות מהתור ב-`upsert` (בקבוצות של 500).
+1. **push:** שליחת הרשימות, אחריהן המשימות ואחריהן הפתקים (`TABLES`) מהתור ב-`upsert` (בקבוצות של 500).
    מזהה יוצא מהתור רק אם `updated_at` שלו לא השתנה בזמן השליחה.
 2. **pull:** שליפת רשומות עם `server_updated_at >= cursor`, ממוינות ובדפים של 1000.
    משתמשים ב-`>=` כדי לא לפספס רשומות עם אותה חותמת זמן. קבלה כפולה של רשומה לא מזיקה.
