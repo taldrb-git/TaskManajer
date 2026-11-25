@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { XIcon } from '../icons'
 
 interface Props {
@@ -36,12 +36,40 @@ export function useDismiss(onClose: () => void) {
   }, [])
 }
 
+/**
+ * מקלדת בטלפון: באייפון רכיבים קבועים (position: fixed) נשארים מאחורי המקלדת.
+ * מחזיר סגנון שמצמיד את הרקע לאזור הנראה בפועל (visualViewport), כך שהחלון יושב מעל המקלדת.
+ */
+export function useKeyboardViewport(): CSSProperties | undefined {
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      // בלי מקלדת – לא נוגעים (ה-CSS הרגיל עובד)
+      if (window.innerHeight - vv.height < 80) setBox(null)
+      else setBox({ top: vv.offsetTop, height: vv.height })
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
+
+  return box ? { top: box.top, height: box.height, bottom: 'auto' } : undefined
+}
+
 /** חלון תחתון (במובייל) / דיאלוג (במחשב). נסגר גם בלחיצה על הרקע. */
 export function Sheet({ title, onClose, children, footer }: Props) {
   useDismiss(onClose)
+  const viewport = useKeyboardViewport()
 
   return (
-    <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="sheet-backdrop" style={viewport} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
         <header className="sheet-head">
           <h2>{title}</h2>

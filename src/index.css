@@ -307,9 +307,9 @@ h1, h2, h3 { margin: 0; }
   .toast { bottom: calc(150px + var(--safe-b)); }
   .fab { bottom: calc(80px + var(--safe-b)); inset-inline-start: 18px; }
 
-  .sheet-backdrop { place-items: end stretch; padding: 0; }
+  .sheet-backdrop { display: flex; flex-direction: column; justify-content: flex-end; padding: 0; }
   .composer { margin: 0 8px calc(8px + var(--safe-b)); }
-  .sheet { width: 100%; max-height: 92dvh; border-radius: 18px 18px 0 0; animation: up .22s ease-out; }
+  .sheet { width: 100%; max-height: min(92dvh, 100%); border-radius: 18px 18px 0 0; animation: up .22s ease-out; }
 }
 
 /* ===== לוח שנה ===== */

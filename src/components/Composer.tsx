@@ -5,7 +5,7 @@ import { PRIORITY_LABEL, REPEAT_LABEL, parseQuickAdd } from '../logic'
 import { speechSupported, useSpeech } from '../speech'
 import { addTask } from '../store'
 import type { TaskList, View } from '../types'
-import { useDismiss } from './Sheet'
+import { useDismiss, useKeyboardViewport } from './Sheet'
 
 interface Props {
   view: View
@@ -16,6 +16,7 @@ interface Props {
 /** חלונית הוספת משימה שנפתחת מכפתור ה-+. נשארת פתוחה להוספה רצופה. */
 export function Composer({ view, lists, onClose }: Props) {
   useDismiss(onClose)
+  const viewport = useKeyboardViewport()
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   // הקלטה קולית: הטקסט נכתב לשורה תוך כדי דיבור, ואז לוחצים על החץ כדי להוסיף
@@ -37,7 +38,7 @@ export function Composer({ view, lists, onClose }: Props) {
   }
 
   return (
-    <div className="composer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="composer-backdrop" style={viewport} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <form className="composer" onSubmit={submit} role="dialog" aria-label="משימה חדשה">
         <input
           ref={inputRef}

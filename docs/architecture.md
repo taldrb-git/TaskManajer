@@ -57,7 +57,7 @@ src/
     TaskEditor.tsx      חלון עריכה: שעה, תזכורת, חזרה, תת-משימות (Subtasks), ומצב שכפול (DuplicateBody) באותו חלון
     Calendar.tsx        לוח חודשי או שבועי (מכווץ): רשת 7 עמודות שמתחילה ביום ראשון, נקודות לפי dayMarks, החלקות
     Settings.tsx        הגדרות וטופס התחברות
-    Sheet.tsx           חלון כללי, ו-useDismiss: סגירה ב-Esc ובכפתור "חזור"
+    Sheet.tsx           חלון כללי, useDismiss (סגירה ב-Esc ובכפתור "חזור") ו-useKeyboardViewport (מיקום מעל המקלדת)
 supabase/schema.sql     טבלאות, trigger, RLS, realtime
 public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/assets-generator)
 .github/workflows/      פריסה ל-GitHub Pages
@@ -139,6 +139,11 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 - עם `numbered` הכותרות הופכות ל-"`<כותרת> i`", וגם המקורית מקבלת 1.
 - הפונקציה מחזירה פונקציית ביטול, שמוחקת (מחיקה רכה) את העותקים ומחזירה את הכותרת והתאריך המקוריים.
 - מצב השכפול מוצג בתוך אותו `Sheet` של העריכה. חלון חדש היה מפעיל את `useDismiss` מחדש, וה-`history.back()` האסינכרוני היה סוגר אותו מיד.
+
+### חלונות מעל המקלדת
+- באייפון, רכיב `position: fixed` נשאר מאחורי המקלדת, כי המקלדת מקטינה רק את ה-`visualViewport` ולא את החלון.
+- `useKeyboardViewport` מאזין ל-`resize` ול-`scroll` של `visualViewport`. כשהמקלדת פתוחה (הפרש של 80px ומעלה), הוא מחזיר `top` ו-`height` לרקע של `Composer` ושל `Sheet`, כך שהחלון יושב בדיוק באזור הנראה.
+- במובייל `.sheet-backdrop` הוא flex בעמודה, ול-`.sheet` יש `max-height: min(92dvh, 100%)`, כדי שחלון העריכה יתכווץ לגובה שנשאר.
 
 ## כיווץ לוח השנה
 
