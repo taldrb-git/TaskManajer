@@ -1,6 +1,6 @@
 import { useRef, useState, type HTMLAttributes, type TouchEvent } from 'react'
 import { dueLabel, today } from '../dates'
-import { BellIcon, CheckCircleIcon, ListCheckIcon, NoteIcon, PostponeIcon, RepeatIcon } from '../icons'
+import { BellIcon, CheckCircleIcon, ListCheckIcon, NoteIcon, PostponeIcon, RepeatIcon, TrashIcon } from '../icons'
 import { REPEAT_LABEL } from '../logic'
 import type { Task, TaskList } from '../types'
 
@@ -14,8 +14,13 @@ interface Props {
   hideDue?: boolean
   onToggle: (t: Task) => void
   onOpen: (t: Task) => void
-  /** החלקה: ימינה = בוצעה, שמאלה = דחייה למחר (רק בטלפון, רק למשימות פתוחות) */
+  /** החלקה: ימינה = בוצעה (או מחיקה), שמאלה = דחייה למחר (רק בטלפון, רק למשימות פתוחות) */
   onPostpone?: (t: Task) => void
+  /** מה עושה החלקה ימינה: 'done' (ברירת מחדל) או 'delete' (בלוח השנה) */
+  swipeRight?: 'done' | 'delete'
+  onDelete?: (t: Task) => void
+  /** לחיצה ארוכה (בטלפון) – במסך "היום" מוחקת את המשימה */
+  onLongPress?: (t: Task) => void
   /** אירועי גרירה (מ-useDateDrag) – רק במסכים שיש בהם תאריכים לשחרר עליהם */
   dragProps?: HTMLAttributes<HTMLLIElement>
   dragging?: boolean
@@ -23,8 +28,27 @@ interface Props {
 
 const SWIPE_TRIGGER = 90 // פיקסלים להפעלה
 const SWIPE_MAX = 140
+const LONG_PRESS_MS = 550
 
-export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, onOpen, onPostpone, dragProps, dragging }: Props) {
+/**
+ * אחרי לחיצה ארוכה המשימה נמחקת מהרשימה, והשחרור של האצבע היה "לוחץ" על המשימה שתפסה את מקומה.
+ * בולעים את הלחיצה הבאה בכל המסמך (הלחיצה מגיעה מיד אחרי השחרור).
+ */
+function suppressNextClick() {
+  const swallow = (e: MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    cleanup()
+  }
+  const cleanup = () => {
+    window.removeEventListener('click', swallow, true)
+    clearTimeout(timer)
+  }
+  window.addEventListener('click', swallow, true)
+  const timer = window.setTimeout(cleanup, 400)
+}
+
+export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, onOpen, onPostpone, swipeRight = 'done', onDelete, onLongPress, dragProps, dragging }: Props) {
   const overdue = !task.done && task.due !== null && task.due < today()
   const showDue = task.due !== null && !hideDue && !(hideToday && task.due === today())
   const subDone = task.subtasks.filter((s) => s.done).length
@@ -33,12 +57,38 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
   const [dx, setDx] = useState(0)
   const start = useRef<{ x: number; y: number; mode: 'idle' | 'swipe' | 'scroll' } | null>(null)
   const canSwipe = !task.done && !!onPostpone
+  const swipeDeletes = swipeRight === 'delete' && !!onDelete
+
+  // ---------- לחיצה ארוכה ----------
+  const press = useRef<{ x: number; y: number; timer: number } | null>(null)
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer)
+    press.current = null
+  }
 
   const onTouchStart = (e: TouchEvent<HTMLLIElement>) => {
     dragProps?.onTouchStart?.(e)
-    if (canSwipe) start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, mode: 'idle' }
+    const x = e.touches[0].clientX
+    const y = e.touches[0].clientY
+    if (canSwipe) start.current = { x, y, mode: 'idle' }
+    if (onLongPress) {
+      cancelPress()
+      press.current = {
+        x,
+        y,
+        timer: window.setTimeout(() => {
+          press.current = null
+          start.current = null
+          suppressNextClick()
+          navigator.vibrate?.(15)
+          onLongPress(task)
+        }, LONG_PRESS_MS),
+      }
+    }
   }
   const onTouchMove = (e: TouchEvent<HTMLLIElement>) => {
+    const p = press.current
+    if (p && Math.hypot(e.touches[0].clientX - p.x, e.touches[0].clientY - p.y) > 8) cancelPress()
     const s = start.current
     if (!s || dragging) return
     const mx = e.touches[0].clientX - s.x
@@ -50,22 +100,35 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
     if (s.mode === 'swipe') setDx(Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, mx)))
   }
   const onTouchEnd = () => {
+    cancelPress()
     const s = start.current
     start.current = null
     if (s?.mode === 'swipe') {
-      if (dx >= SWIPE_TRIGGER) onToggle(task)
+      if (dx >= SWIPE_TRIGGER) (swipeDeletes ? onDelete!(task) : onToggle(task))
       else if (dx <= -SWIPE_TRIGGER) onPostpone?.(task)
     }
     setDx(0)
   }
 
-  const cls = ['task', task.done && 'is-done', dragProps && 'draggable', dragging && 'dragging', dx !== 0 && 'swiping'].filter(Boolean).join(' ')
+  const cls = ['task', task.done && 'is-done', (dragProps || onLongPress) && 'draggable', dragging && 'dragging', dx !== 0 && 'swiping'].filter(Boolean).join(' ')
+  const rightKind = swipeDeletes ? 'delete' : 'done'
 
   return (
-    <li className={cls} {...dragProps} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+    <li
+      className={cls}
+      {...dragProps}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
       {dx !== 0 && (
-        <div className={`swipe-bg ${dx > 0 ? 'done' : 'later'}${Math.abs(dx) >= SWIPE_TRIGGER ? ' armed' : ''}`} aria-hidden="true">
-          {dx > 0 ? (
+        <div className={`swipe-bg ${dx > 0 ? rightKind : 'later'}${Math.abs(dx) >= SWIPE_TRIGGER ? ' armed' : ''}`} aria-hidden="true">
+          {dx > 0 && swipeDeletes ? (
+            <span>
+              <TrashIcon width={20} height={20} /> מחיקה
+            </span>
+          ) : dx > 0 ? (
             <span>
               <CheckCircleIcon width={20} height={20} /> בוצע
             </span>

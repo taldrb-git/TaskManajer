@@ -450,3 +450,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 @media (max-width: 860px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* החלקה למחיקה (לוח השנה) */
+.swipe-bg.delete { justify-content: flex-end; background: color-mix(in srgb, var(--danger) 14%, var(--bg)); }
+.swipe-bg.delete.armed { color: var(--danger); }

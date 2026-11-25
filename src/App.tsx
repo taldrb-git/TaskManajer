@@ -12,7 +12,7 @@ import { toDateLabel, useDateDrag } from './components/useDateDrag'
 import { fullDateLabel, nextOccurrence, today } from './dates'
 import { CalendarIcon, ChartIcon, CheckCircleIcon, ChevronIcon, CloudIcon, GridCalendarIcon, InboxIcon, MenuIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon, TrashIcon, XIcon } from './icons'
 import { counts, dayMarks, sectionsFor, viewTitle } from './logic'
-import { addList, deleteList, postponeTask, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
+import { addList, deleteList, deleteTask, postponeTask, restoreTask, LIST_COLORS, toggleTask, updateList, updateTask, useStore, type SyncStatus } from './store'
 import { supabase } from './supabase'
 import type { Task, View } from './types'
 
@@ -167,6 +167,11 @@ export default function App() {
     (t: Task) => show('המשימה עברה לסל המחזור', { label: 'ביטול', run: () => restoreTask(t.id) }),
     [show],
   )
+  /** מחיקה מהרשימה (החלקה ימינה בלוח השנה, לחיצה ארוכה במסך "היום") – לסל המחזור, עם ביטול */
+  const onSwipeDelete = (t: Task) => {
+    deleteTask(t.id)
+    onDeleted(t)
+  }
   // גרירת משימה לתאריך אחר (בלוח השנה ובמסך "בקרוב")
   const dnd = useDateDrag((task, date) => {
     const prev = task.due
@@ -324,6 +329,9 @@ export default function App() {
                       dragging={dnd.dragging === t.id}
                       onToggle={onToggle}
                       onPostpone={onPostpone}
+                      swipeRight={active.kind === 'calendar' ? 'delete' : 'done'}
+                      onDelete={onSwipeDelete}
+                      onLongPress={active.kind === 'today' ? onSwipeDelete : undefined}
                       onOpen={(x) => setEditing(x.id)}
                     />
                   ))}
