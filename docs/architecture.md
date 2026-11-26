@@ -131,7 +131,7 @@ public/                 אייקונים (נוצרו מ-icon.svg עם @vite-pwa/
 - **גלולות (`pills.ts`):** כל חפיסה שנרשמה היא `Note` עם `board = 'pills'` ו-`date` = הכדור הראשון. `timeline` בונה מהן קטעים (`pack` של 21 יום, `break` של 7). חפיסה שמתחילה עד היום שאחרי סוף הקודמת נחשבת מחוברת (`chain` גדל). אחרי החפיסה האחרונה שנרשמה הציר ממשיך לבד (`projected`).
   - `connectPack` רושם את החפיסה הבאה ביום שאחרי סוף הנוכחית (ואם הנוכחית מחושבת, רושם גם אותה). מותר רק כש-`chain < MAX_CHAIN` (2). `disconnectPack` מוחק את החפיסה המחוברת.
   - `syncPillTasks` (ב-`store.ts`) יוצר משימות לימי המעבר ב-35 הימים הקרובים, לפי מפתח `"break:YYYY-MM-DD"` / `"pack:YYYY-MM-DD"` ב-`Persisted.pillTasks`. משימה של מעבר שכבר לא בתוכנית נמחקת. רץ אחרי שינוי בגלולות ובכל `rollover`, וגלגול בחצות מדלג על המשימות האלה.
-  - בלוח השנה: `breakDays` → `Calendar` מקבל `breaks` ומוסיף `.pill-break` (פס מתחת למספר).
+  - בלוח השנה: `breakDays` → `Calendar` מקבל `breaks` ומוסיף `.pill-break` (קו דקיק מתחת למספר).
 - **רכב:** `carStatus` (ב-`notes.ts`) – לכל פריט עם תאריך: פג (`expired`) ובתוך חלון ההתראה (`due`, לפי `prefs.carLead`). `syncCarReminders` (ב-`store.ts`) יוצר משימה "לחדש <פריט>" כש-`due`, ושומר ב-`Persisted.carTasks` את המזהה ואת תאריך התוקף. תאריך חדש מחוץ לחלון → המשימה מסומנת כבוצעה. "חידשתי" פותח את `NoteEditor` עם `preset.date` של שנה קדימה (ה-`preset` גובר על הערך הקיים).
 - **החזרים וגיפטקארד:** שדה `kind` ב-`Note`: `'giftcard'` (נשמר עם `status = 2`, `source` = איפה הוא נמצא) או `'giftcard_used'`. `pendingRefunds` סופר רק זיכויים רגילים; `giftcardTotal` סופר גיפטקארדים שלא נוצלו.
 - **ספרים:** כמו "לקנות" (`status` 0/2), `source` = סופר/ת. השיתוף משתמש ב-`navigator.share` (תפריט השיתוף של הטלפון), ובלעדיו מעתיק ללוח.

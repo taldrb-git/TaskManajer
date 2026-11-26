@@ -536,7 +536,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .book-pref-row select { width: auto; min-width: 150px; }
 
 /* ===== גלולות ===== */
-.cal-day.pill-break::after { content: ""; display: block; width: 62%; height: 3px; border-radius: 2px; background: #e89ab9; opacity: .75; margin-top: -1px; }
+/* יום הפסקה בגלולות: קו דקיק ועדין מתחת למספר */
+.cal-day.pill-break::after { content: ""; display: block; width: 28%; height: 2px; border-radius: 1px; background: #e89ab9; opacity: .55; margin-top: -1px; }
 .pill-chip { background: color-mix(in srgb, #e89ab9 16%, transparent); color: #f0b4cb; }
 .pill-card {
   display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; padding: 16px; border-radius: 14px;
