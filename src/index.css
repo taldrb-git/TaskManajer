@@ -596,3 +596,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .inline-meta { color: var(--muted); font-size: 14px; }
 .note.compact.is-done .inline-meta { text-decoration: none; }
 .dup-warn { margin-top: -8px; font-size: 14px; color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 10px; padding: 8px 12px; }
+.search.board-search { margin: 0 0 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px 10px; display: flex; align-items: center; gap: 8px; }
+.search.board-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 8px 0; font-size: 16px; }
+.search.board-search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }

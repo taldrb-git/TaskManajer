@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { addMonths, fullDateLabel, today } from '../dates'
-import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, SettingsIcon, TrashIcon } from '../icons'
-import { duplicateBook, knownAuthors, orderedBoards, ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
+import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, SearchIcon, SettingsIcon, TrashIcon, XIcon } from '../icons'
+import { normTitle, duplicateBook, knownAuthors, orderedBoards, ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
 import { setBoardOrder, addNote, connectPack, deleteNote, disconnectPack, setArchiveDays, setBookingInterval, setBookingLead, setCarLead, updateNote } from '../store'
 import { BREAK_DAYS, MAX_CHAIN, PILL_DAYS, packStarts, pillState, timeline, upcomingBreaks } from '../pills'
 import type { Board, Note, NoteBoard, Task } from '../types'
@@ -150,6 +150,7 @@ interface BoardProps {
 }
 
 export function NoteBoardView({ board, notes, prefs, onEdit, onAdd, onDelete, toast }: BoardProps) {
+  const [q, setQ] = useState('') // חיפוש בספרים
   const meta = boardMeta(board)
   const items = notesOf(notes, board)
 
@@ -186,9 +187,39 @@ export function NoteBoardView({ board, notes, prefs, onEdit, onAdd, onDelete, to
 
   const row = (n: Note) => <NoteRow key={n.id} note={n} onEdit={onEdit} onDelete={onDelete} toast={toast} />
   const pending = open.filter((n) => !n.kind)
+
+  const search = board === 'books' && (
+    <div className="search board-search">
+      <SearchIcon width={18} height={18} className="muted" />
+      <input type="search" placeholder="חיפוש ספר או סופר/ת…" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search" />
+      {q && (
+        <button className="icon-btn small" onClick={() => setQ('')} aria-label="ניקוי החיפוש">
+          <XIcon width={16} height={16} />
+        </button>
+      )}
+    </div>
+  )
+  if (board === 'books' && q.trim()) {
+    const nq = normTitle(q)
+    const hits = items.filter((n) => normTitle(n.title).includes(nq) || normTitle(n.source).includes(nq))
+    const hitsOrdered = [...hits.filter((n) => n.status < 2), ...hits.filter((n) => n.status >= 2)]
+    return (
+      <>
+        {tools}
+        {search}
+        {hits.length ? (
+          <ul className="notes">{hitsOrdered.map(row)}</ul>
+        ) : (
+          <p className="muted board-clear">לא נמצא ספר כזה</p>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       {tools}
+      {search}
       {board === 'refunds' && (pending.length > 0 || gifts.length > 0) && (
         <div className="board-summary">
           {pending.length > 0 && (
