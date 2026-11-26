@@ -6,8 +6,8 @@ import { Calendar } from './components/Calendar'
 import { Composer } from './components/Composer'
 import { StatsView } from './components/StatsView'
 import { TrashView } from './components/TrashView'
-import { NoteBoardView, NoteEditor, NotesHome } from './components/NotesView'
-import { boardMeta, isBoard } from './notes'
+import { ArchiveTools, NoteBoardView, NoteEditor, NotesHome } from './components/NotesView'
+import { archiveDays, boardMeta, isBoard } from './notes'
 import { breakDays } from './pills'
 import { hebrewDate, hebrewDateFull, holidayOn } from './holidays'
 import { checkReminders } from './reminders'
@@ -136,7 +136,8 @@ export default function App() {
   }, [listMissing, go])
 
   const active: View = useMemo(() => (query !== null ? { kind: 'search', q: query } : view), [query, view])
-  const sections = useMemo(() => sectionsFor(active, tasks, dateWithHoliday), [active, tasks])
+  const somedayArchive = archiveDays(prefs, 'someday')
+  const sections = useMemo(() => sectionsFor(active, tasks, dateWithHoliday, { somedayArchiveDays: somedayArchive }), [active, tasks, somedayArchive])
 
   // תזכורות: בדיקה כל 30 שניות, וגם מיד כשמשימות משתנות
   const tasksRef = useRef(tasks)
@@ -343,7 +344,7 @@ export default function App() {
               board={noteBoard}
               notes={notes}
               prefs={prefs}
-              onEdit={(n) => setNoteEdit({ board: noteBoard, note: n })}
+              onEdit={(n, preset) => setNoteEdit({ board: noteBoard, note: n, preset })}
               onAdd={(preset) => setNoteEdit({ board: noteBoard, note: null, preset })}
               onDelete={(n) => {
                 deleteNote(n.id)
@@ -352,9 +353,14 @@ export default function App() {
               toast={(m) => show(m)}
             />
           ) : sections.every((s) => !s.tasks.length) ? (
-            <Empty view={active} />
+            <>
+              {active.kind === 'notes' && active.board === 'someday' && <ArchiveTools board="someday" prefs={prefs} />}
+              <Empty view={active} />
+            </>
           ) : (
-            sections.map((s) => (
+            <>
+            {active.kind === 'notes' && active.board === 'someday' && <ArchiveTools board="someday" prefs={prefs} />}
+            {sections.map((s) => (
               <TaskSection key={s.key} title={s.title} tone={s.tone} count={s.tasks.length} collapsible={s.collapsible} date={s.date} dropOver={!!s.date && s.date === dnd.over}>
                 <ul className="tasks">
                   {s.tasks.map((t) => (
@@ -376,7 +382,8 @@ export default function App() {
                   ))}
                 </ul>
               </TaskSection>
-            ))
+            ))}
+            </>
           )}
         </div>
       </main>

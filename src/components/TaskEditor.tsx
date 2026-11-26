@@ -3,7 +3,7 @@ import { addDays, diffDays, dueLabel, fullDateLabel, today } from '../dates'
 import { CopyIcon, TrashIcon, XIcon } from '../icons'
 import { PRIORITY_LABEL, REMIND_OPTIONS, REPEAT_LABEL } from '../logic'
 import { notificationPermission, requestNotifications } from '../reminders'
-import { deleteTask, duplicateTask, toggleTask, uid, updateTask, useStore } from '../store'
+import { addList, deleteTask, duplicateTask, toggleTask, uid, updateTask, useStore } from '../store'
 import type { Priority, Repeat, Task } from '../types'
 import { Sheet } from './Sheet'
 import { doneAfterLabel, postponedLabel } from './TaskItem'
@@ -113,6 +113,8 @@ export function TaskEditor({ taskId, onClose, onDeleted, onDuplicated }: Props) 
         />
       </div>
 
+      <Subtasks task={task} />
+
       <div className="field">
         <span className="label">תאריך יעד</span>
         <div className="chips">
@@ -205,8 +207,6 @@ export function TaskEditor({ taskId, onClose, onDeleted, onDuplicated }: Props) 
         {task.repeat && <span className="hint">כשמסמנים את המשימה כבוצעה, נוצרת לבד המשימה הבאה</span>}
       </label>
 
-      <Subtasks task={task} />
-
       <div className="field">
         <span className="label">עדיפות</span>
         <div className="segmented" role="radiogroup" aria-label="עדיפות">
@@ -225,14 +225,22 @@ export function TaskEditor({ taskId, onClose, onDeleted, onDuplicated }: Props) 
       </div>
 
       <label className="field">
-        <span className="label">רשימה</span>
-        <select value={task.list_id ?? ''} onChange={(e) => updateTask(task.id, { list_id: e.target.value || null })}>
+        <span className="label">רשימה (נושא, למשל עבודה או בית)</span>
+        <select
+          value={task.list_id ?? ''}
+          onChange={(e) => {
+            if (e.target.value !== '__new') return updateTask(task.id, { list_id: e.target.value || null })
+            const name = prompt('שם הרשימה החדשה (למשל: עבודה, בית)')?.trim()
+            if (name) updateTask(task.id, { list_id: addList(name).id })
+          }}
+        >
           <option value="">ללא רשימה</option>
           {lists.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
             </option>
           ))}
+          <option value="__new">＋ רשימה חדשה…</option>
         </select>
       </label>
 

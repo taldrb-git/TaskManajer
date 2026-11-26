@@ -39,7 +39,7 @@ export interface TaskList {
 }
 
 /** לוחות במסך "פתקים". "יום אחד" = משימות בלי תאריך; השאר = פתקים (Note) */
-export type Board = 'someday' | 'shopping' | 'packages' | 'refunds' | 'hair' | 'lashes' | 'pills'
+export type Board = 'someday' | 'shopping' | 'books' | 'packages' | 'refunds' | 'hair' | 'lashes' | 'pills' | 'car'
 export type NoteBoard = Exclude<Board, 'someday'>
 
 /**
@@ -49,6 +49,9 @@ export type NoteBoard = Exclude<Board, 'someday'>
  * - refunds: title (ממי), amount, date (מתי ביקשתי), status 0 ביקשתי / 1 אושר / 2 התקבל בבנק
  * - hair / lashes: title (סוג הטיפול, למשל "גוונים" או "הרמת ריסים"), date (תאריך התור)
  * - pills: date (היום של הכדור הראשון בחפיסה). כל השאר מחושב ב-pills.ts
+ * - books: title (שם הספר), source (סופר/ת), status (0 = לקרוא, 2 = קראתי)
+ * - car: title (טסט / ביטוח חובה / ...), date (בתוקף עד), source (חברה / סוכן), amount (עלות)
+ * - refunds עם kind = 'giftcard': גיפטקארד (status 2), source = איפה הוא נמצא. 'giftcard_used' = נוצל
  */
 export interface Note {
   id: string
@@ -61,6 +64,7 @@ export interface Note {
   date: string | null // YYYY-MM-DD
   time: string | null // HH:MM – שעת התור (שיער / ריסים)
   task_id: string | null // תור עתידי: המשימה המקושרת בלוח השנה
+  kind: string // סוג משני (כרגע: גיפטקארד בהחזרים). '' = רגיל
   notes: string
   created_at: string
   updated_at: string

@@ -49,7 +49,14 @@ export function useKeyboardViewport(): CSSProperties | undefined {
     const update = () => {
       // בלי מקלדת – לא נוגעים (ה-CSS הרגיל עובד)
       if (window.innerHeight - vv.height < 80) setBox(null)
-      else setBox({ top: vv.offsetTop, height: vv.height })
+      else {
+        setBox({ top: vv.offsetTop, height: vv.height })
+        // החלון התקצר – מחזירים לתצוגה את השדה שבו לחצת (אחרת נראה כאילו הדף "קפץ" למעלה)
+        setTimeout(() => {
+          const el = document.activeElement as HTMLElement | null
+          if (el?.closest('.sheet, .composer')) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }, 80)
+      }
     }
     update()
     vv.addEventListener('resize', update)

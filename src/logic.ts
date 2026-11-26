@@ -1,5 +1,5 @@
 import { addDays, toISODate, today } from './dates'
-import { boardMeta } from './notes'
+import { archived, boardMeta } from './notes'
 import type { Priority, Repeat, Task, TaskList, View } from './types'
 
 export const PRIORITY_LABEL: Record<Priority, string> = { 0: 'ללא', 1: 'נמוכה', 2: 'בינונית', 3: 'גבוהה' }
@@ -81,7 +81,7 @@ function groupByDate(tasks: Task[], label: (iso: string) => string): Section[] {
   return [...map.entries()].map(([k, ts]) => ({ key: k || 'none', title: k ? label(k) : 'ללא תאריך', tasks: ts, date: k || undefined }))
 }
 
-export function sectionsFor(view: View, all: Task[], dateLabel: (iso: string) => string): Section[] {
+export function sectionsFor(view: View, all: Task[], dateLabel: (iso: string) => string, opts: { somedayArchiveDays?: number } = {}): Section[] {
   const t = today()
   const open = all.filter((x) => !x.done).sort(compareTasks)
   const doneSorted = all.filter((x) => x.done).sort((a, b) => (b.done_at ?? '').localeCompare(a.done_at ?? ''))
@@ -121,7 +121,7 @@ export function sectionsFor(view: View, all: Task[], dateLabel: (iso: string) =>
       if (view.board !== 'someday') return []
       return [
         { key: 'open', tasks: open.filter((x) => !x.due) },
-        { key: 'done', title: 'הושלמו', tasks: doneSorted.filter((x) => !x.due), collapsible: true },
+        { key: 'done', title: 'הושלמו', tasks: doneSorted.filter((x) => !x.due && !archived(x.done_at, opts.somedayArchiveDays ?? 0)), collapsible: true },
       ].filter((s, i) => i === 0 || s.tasks.length)
     case 'stats':
     case 'trash':

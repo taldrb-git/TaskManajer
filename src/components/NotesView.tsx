@@ -1,8 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { fullDateLabel, today } from '../dates'
-import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, TrashIcon } from '../icons'
-import { BOARDS, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
-import { addNote, connectPack, deleteNote, disconnectPack, setBookingInterval, setBookingLead, updateNote } from '../store'
+import { addMonths, fullDateLabel, today } from '../dates'
+import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, SettingsIcon, TrashIcon } from '../icons'
+import { ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, BOARDS, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
+import { addNote, connectPack, deleteNote, disconnectPack, setArchiveDays, setBookingInterval, setBookingLead, setCarLead, updateNote } from '../store'
 import { BREAK_DAYS, MAX_CHAIN, PILL_DAYS, packStarts, pillState, timeline, upcomingBreaks } from '../pills'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
@@ -20,6 +20,13 @@ export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; note
     const items = notesOf(notes, b)
     const open = items.filter((n) => n.status < 2)
     if (b === 'shopping') return open.length ? `${open.length} לקנות` : 'ריק'
+    if (b === 'books') return open.length ? (open.length === 1 ? 'ספר אחד לקרוא' : `${open.length} ספרים לקרוא`) : items.length ? 'קראת הכול 🎉' : 'ריק'
+    if (b === 'car') {
+      const st = carStatus(notes, prefs)
+      const due = st.filter((s) => s.due)
+      if (due.length) return { hot: `לחדש ${due.map((s) => s.note.title).join(', ')}`, bell: true }
+      return st[0] ? `${st[0].note.title} · ${expiryLabel(st[0].note.date!)}` : 'ריק'
+    }
     if (b === 'packages') {
       if (!open.length) return items.length ? 'הכול הגיע' : 'ריק'
       const onWay = open.filter((n) => n.status === 1).length
@@ -32,9 +39,12 @@ export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; note
       return s.next?.kind === 'break' ? `כדור ${s.day}/${s.length} · הפסקה ${agoLabel(s.next.start)}` : `כדור ${s.day}/${s.length} · מחוברת לחפיסה הבאה`
     }
     if (b === 'refunds') {
-      if (!open.length) return items.length ? 'הכול התקבל' : 'ריק'
+      const gifts = giftcardTotal(notes)
+      const giftText = gifts ? `גיפטקארדים ${formatMoney(gifts)}` : ''
+      const pending = open.filter((n) => !n.kind)
+      if (!pending.length) return giftText || (items.length ? 'הכול התקבל' : 'ריק')
       const sum = pendingRefunds(notes)
-      return sum ? `ממתינים לך ${formatMoney(sum)}` : `${open.length} ממתינים`
+      return [sum ? `ממתינים לך ${formatMoney(sum)}` : `${pending.length} ממתינים`, giftText].filter(Boolean).join(' · ')
     }
     const due = bookingStatus(notes, prefs, b as TreatmentBoard).filter((s) => s.due)
     if (due.length) return { hot: `לקבוע תור ${due.map((s) => s.type).join(', ')}`, bell: true }
@@ -84,7 +94,7 @@ interface BoardProps {
   board: NoteBoard
   notes: Note[]
   prefs: BookingPrefs
-  onEdit: (n: Note) => void
+  onEdit: (n: Note, preset?: Partial<Note>) => void
   onAdd: (preset: Partial<Note>) => void
   onDelete: (n: Note) => void
   toast: (msg: string) => void
@@ -95,40 +105,152 @@ export function NoteBoardView({ board, notes, prefs, onEdit, onAdd, onDelete, to
   const items = notesOf(notes, board)
 
   if (board === 'pills') return <PillsBoard notes={notes} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+  if (board === 'car') return <CarBoard notes={notes} prefs={prefs} onEdit={onEdit} onDelete={onDelete} toast={toast} />
   if (isTreatment(board)) return <TreatmentBoardView board={board} items={items} notes={notes} prefs={prefs} onEdit={onEdit} onAdd={onAdd} onDelete={onDelete} />
 
   const open = items.filter((n) => n.status < 2)
-  const done = items.filter((n) => n.status >= 2).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  const gifts = items.filter((n) => n.kind === 'giftcard')
+  const usedGifts = items.filter((n) => n.kind === 'giftcard_used').sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  const archiveAfter = board === 'shopping' ? archiveDays(prefs, 'shopping') : 0
+  const done = items
+    .filter((n) => n.status >= 2 && !n.kind.startsWith('giftcard') && !archived(n.updated_at, archiveAfter))
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 
-  if (!items.length) return <BoardEmpty board={board} />
+  const tools =
+    board === 'shopping' ? (
+      <ArchiveTools board="shopping" prefs={prefs} />
+    ) : board === 'books' && open.length > 0 ? (
+      <div className="board-tools">
+        <button className="btn small ghost" onClick={() => shareBooks(open, toast)}>
+          📤 שליחת רשימת הקריאה
+        </button>
+      </div>
+    ) : null
+
+  if (!items.length)
+    return (
+      <>
+        {tools}
+        <BoardEmpty board={board} />
+      </>
+    )
 
   const row = (n: Note) => <NoteRow key={n.id} note={n} onEdit={onEdit} onDelete={onDelete} toast={toast} />
+  const pending = open.filter((n) => !n.kind)
   return (
     <>
-      {board === 'refunds' && open.length > 0 && (
+      {tools}
+      {board === 'refunds' && (pending.length > 0 || gifts.length > 0) && (
         <div className="board-summary">
-          ממתינים לך <b>{formatMoney(pendingRefunds(notes))}</b>
-          <span className="muted"> · {open.length === 1 ? 'החזר אחד' : `${open.length} החזרים`}</span>
+          {pending.length > 0 && (
+            <span>
+              ממתינים לך <b>{formatMoney(pendingRefunds(notes))}</b>
+              <span className="muted"> · {pending.length === 1 ? 'החזר אחד' : `${pending.length} החזרים`}</span>
+            </span>
+          )}
+          {gifts.length > 0 && (
+            <span>
+              🎁 בגיפטקארדים <b>{formatMoney(giftcardTotal(notes))}</b>
+            </span>
+          )}
         </div>
       )}
-      {open.length > 0 ? <ul className="notes">{open.map(row)}</ul> : <p className="muted board-clear">אין פריטים פתוחים 🎉</p>}
+      {open.length > 0 ? <ul className="notes">{open.map(row)}</ul> : gifts.length === 0 && <p className="muted board-clear">אין פריטים פתוחים 🎉</p>}
+      {gifts.length > 0 && (
+        <section className="section">
+          <h2 className="section-title">
+            🎁 גיפטקארדים <span className="muted">{gifts.length}</span>
+          </h2>
+          <ul className="notes">{gifts.map(row)}</ul>
+        </section>
+      )}
       {done.length > 0 && (
         <Collapsible title={meta.doneTitle ?? 'הסתיימו'} count={done.length}>
           <ul className="notes">{done.map(row)}</ul>
+        </Collapsible>
+      )}
+      {usedGifts.length > 0 && (
+        <Collapsible title="גיפטקארדים שנוצלו" count={usedGifts.length}>
+          <ul className="notes">{usedGifts.map(row)}</ul>
         </Collapsible>
       )}
     </>
   )
 }
 
+/** שליחת רשימת הספרים שעוד לא נקראו – בתפריט השיתוף של הטלפון (וואטסאפ, הודעה…), או העתקה */
+function shareBooks(open: Note[], toast: (m: string) => void) {
+  const text = ['📚 ספרים שאני רוצה לקרוא:', ...open.map((n) => `• ${n.title}${n.source ? ` – ${n.source}` : ''}`)].join('\n')
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {})
+    return
+  }
+  navigator.clipboard?.writeText(text).then(
+    () => toast('הרשימה הועתקה – אפשר להדביק בהודעה'),
+    () => toast('לא הצלחתי להעתיק'),
+  )
+}
+
+/** כפתור "הגדרות" ללוח עם ארכיון (לקנות, יום אחד) */
+export function ArchiveTools({ board, prefs }: { board: 'shopping' | 'someday'; prefs: BookingPrefs }) {
+  const [open, setOpen] = useState(false)
+  const days = archiveDays(prefs, board)
+  return (
+    <div className="board-tools">
+      <button className="btn small ghost" onClick={() => setOpen(true)}>
+        <SettingsIcon width={16} height={16} /> הגדרות
+      </button>
+      {open && (
+        <Sheet
+          title={`הגדרות · ${boardMeta(board).label}`}
+          onClose={() => setOpen(false)}
+          footer={
+            <>
+              <span className="spacer" />
+              <button className="btn primary" onClick={() => setOpen(false)}>
+                סיום
+              </button>
+            </>
+          }
+        >
+          <label className="field">
+            <span className="label">{board === 'shopping' ? 'פריטים שנקנו יוצאים מהרשימה' : 'רעיונות שבוצעו יוצאים מהרשימה'}</span>
+            <select value={days} onChange={(e) => setArchiveDays(board, Number(e.target.value))}>
+              {ARCHIVE_OPTIONS.map(([d, l]) => (
+                <option key={d} value={d}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              {board === 'shopping'
+                ? 'עד אז הם מופיעים בחלק המקופל "נקנו".'
+                : 'עד אז הם מופיעים בחלק המקופל "הושלמו". הם תמיד נשארים במסך "הושלמו".'}
+            </span>
+          </label>
+        </Sheet>
+      )}
+    </div>
+  )
+}
+
 function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: Note) => void; onDelete: (n: Note) => void; toast: (m: string) => void }) {
   const meta = boardMeta(note.board)
   const swipe = useSwipeDelete(() => onDelete(note))
-  const isDone = note.status >= 2
+  const gift = note.kind === 'giftcard' || note.kind === 'giftcard_used'
+  const isDone = note.status >= 2 && (!gift || note.kind === 'giftcard_used')
+  const checkable = note.board === 'shopping' || note.board === 'books'
   const details: ReactNode[] = []
-  if (note.board === 'refunds' && note.amount !== null) details.push(<b key="a">{formatMoney(note.amount)}</b>)
-  if (note.source) details.push(<span key="s">{note.source}</span>)
-  if (note.date) {
+  if ((note.board === 'refunds' || note.board === 'car') && note.amount !== null) details.push(<b key="a">{formatMoney(note.amount)}</b>)
+  if (note.source) details.push(<span key="s">{gift ? `📍 ${note.source}` : note.source}</span>)
+  if (note.date && note.board === 'car') {
+    const soon = note.date >= today() && note.date <= addMonths(today(), 1)
+    details.push(
+      <span key="d" className={note.date < today() ? 'expired' : soon ? 'soon' : undefined}>
+        {expiryLabel(note.date)}
+      </span>,
+    )
+  } else if (note.date && !gift) {
     const label =
       note.board === 'packages'
         ? isDone
@@ -149,12 +271,12 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
     <li className={`note${isDone ? ' is-done' : ''}${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
       {swipe.bg}
       <div className="note-row" style={swipe.rowStyle}>
-      {note.board === 'shopping' && (
+      {checkable && (
         <button
           className="check"
           role="checkbox"
           aria-checked={isDone}
-          aria-label={isDone ? `להחזיר לרשימה: ${note.title}` : `נקנה: ${note.title}`}
+          aria-label={isDone ? `להחזיר לרשימה: ${note.title}` : note.board === 'books' ? `קראתי: ${note.title}` : `נקנה: ${note.title}`}
           onClick={() => updateNote(note.id, { status: isDone ? 0 : 2 })}
         >
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -181,7 +303,17 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
           <CopyIcon width={16} height={16} />
         </button>
       )}
-      {meta.statuses && (
+      {note.kind === 'giftcard' && (
+        <button className="status s1" onClick={() => updateNote(note.id, { kind: 'giftcard_used' })} aria-label={`סימון שהגיפטקארד ${note.title} נוצל`}>
+          🎁 נוצל?
+        </button>
+      )}
+      {note.kind === 'giftcard_used' && (
+        <button className="status" onClick={() => updateNote(note.id, { kind: 'giftcard' })} aria-label="החזרה לגיפטקארדים זמינים">
+          נוצל
+        </button>
+      )}
+      {meta.statuses && !gift && (
         <button
           className={`status s${note.status}`}
           onClick={() => updateNote(note.id, { status: (note.status + 1) % 3 })}
@@ -192,6 +324,81 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
       )}
       </div>
     </li>
+  )
+}
+
+// ---------- רכב ----------
+
+function CarBoard({ notes, prefs, onEdit, onDelete, toast }: { notes: Note[]; prefs: BookingPrefs; onEdit: (n: Note, preset?: Partial<Note>) => void; onDelete: (n: Note) => void; toast: (m: string) => void }) {
+  const [settings, setSettings] = useState(false)
+  const items = notesOf(notes, 'car')
+  const status = carStatus(notes, prefs)
+  const noDate = items.filter((n) => !n.date)
+  const tools = (
+    <div className="board-tools">
+      <button className="btn small ghost" onClick={() => setSettings(true)}>
+        <BellIcon width={16} height={16} /> התראה לפני פקיעת תוקף
+      </button>
+    </div>
+  )
+  const sheet = settings && (
+    <Sheet
+      title="התראות · רכב"
+      onClose={() => setSettings(false)}
+      footer={
+        <>
+          <span className="spacer" />
+          <button className="btn primary" onClick={() => setSettings(false)}>
+            סיום
+          </button>
+        </>
+      }
+    >
+      <label className="field">
+        <span className="label">מתי להזכיר לחדש</span>
+        <select value={prefs.carLead ?? 30} onChange={(e) => setCarLead(Number(e.target.value))}>
+          {CAR_LEAD_OPTIONS.map(([d, l]) => (
+            <option key={d} value={d}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <span className="hint">כשמגיע הזמן, תופיע משימה "לחדש…" במסך היום (עד שתעדכני תאריך תוקף חדש), וגם התראה בלוח הזה.</span>
+      </label>
+    </Sheet>
+  )
+  if (!items.length)
+    return (
+      <>
+        {tools}
+        <BoardEmpty board="car" />
+        {sheet}
+      </>
+    )
+  return (
+    <>
+      {tools}
+      {sheet}
+      {status
+        .filter((s) => s.due)
+        .map((s) => (
+          <div key={s.note.id} className={`book-due${s.expired ? ' expired' : ''}`}>
+            <span className="next-label">
+              <BellIcon width={15} height={15} /> {s.expired ? 'פג תוקף' : 'מתקרב מועד החידוש'}
+            </span>
+            <b>{s.note.title}</b>
+            <span className="next-when">{expiryLabel(s.note.date!)}</span>
+            <button className="btn small primary" onClick={() => onEdit(s.note, { date: addMonths(s.note.date!, 12) })}>
+              חידשתי
+            </button>
+          </div>
+        ))}
+      <ul className="notes">
+        {[...status.map((s) => s.note), ...noDate].map((n) => (
+          <NoteRow key={n.id} note={n} onEdit={onEdit} onDelete={onDelete} toast={toast} />
+        ))}
+      </ul>
+    </>
   )
 }
 
@@ -525,6 +732,8 @@ const EMPTY: Record<NoteBoard, string> = {
   hair: 'מתי היה התור האחרון לגוונים, לתלתלים או לתספורת.',
   lashes: 'מתי היה התור האחרון להרמת ריסים.',
   pills: '',
+  books: 'ספרים שאת רוצה לקרוא. מסמנים מה קראת, ואפשר לשלוח את הרשימה בהודעה.',
+  car: 'טסט וביטוחים: תאריך התוקף של כל אחד, והתראה לפני שהוא פג.',
 }
 
 function BoardEmpty({ board }: { board: NoteBoard }) {
@@ -546,7 +755,7 @@ function BoardEmpty({ board }: { board: NoteBoard }) {
 interface EditorProps {
   board: NoteBoard
   note: Note | null // null = פריט חדש
-  preset?: Partial<Note> // ערכים התחלתיים לפריט חדש (למשל מ"קביעת תור")
+  preset?: Partial<Note> // ערכים התחלתיים (פריט חדש מ"קביעת תור", או תאריך חדש ב"חידשתי")
   notes: Note[]
   onClose: () => void
   onDeleted: (n: Note) => void
@@ -560,7 +769,8 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
     source: note?.source ?? '',
     tracking: note?.tracking ?? '',
     amount: note?.amount !== null && note?.amount !== undefined ? String(note.amount) : '',
-    date: note?.date ?? preset?.date ?? (board === 'shopping' ? '' : t),
+    date: preset?.date ?? note?.date ?? (board === 'shopping' || board === 'books' || board === 'car' ? '' : t),
+    kind: note?.kind ?? '',
     time: note?.time ?? '',
     status: note?.status ?? 0,
     notes: note?.notes ?? '',
@@ -579,7 +789,8 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
       amount: amount !== null && Number.isFinite(amount) ? amount : null,
       date: f.date || null,
       time: isTreatment(board) && f.date ? f.time || null : null,
-      status: f.status,
+      status: f.kind === 'giftcard' ? 2 : f.status,
+      kind: board === 'refunds' ? (f.kind === 'giftcard' && note?.kind === 'giftcard_used' ? 'giftcard_used' : f.kind) : '',
       notes: f.notes.trim(),
     }
     if (note) updateNote(note.id, fields)
@@ -587,7 +798,8 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
     onClose()
   }
 
-  const types = isTreatment(board) ? treatmentTypes(notes, board) : []
+  const types = isTreatment(board) ? treatmentTypes(notes, board) : board === 'car' ? CAR_TYPES : []
+  const gift = board === 'refunds' && f.kind === 'giftcard'
 
   return (
     <Sheet
@@ -659,6 +871,54 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
         )}
 
         {board === 'refunds' && (
+          <div className="field">
+            <span className="label">איך הכסף חוזר</span>
+            <div className="segmented">
+              <button type="button" className={`seg${!gift ? ' on' : ''}`} onClick={() => set({ kind: '' })}>
+                זיכוי (כרטיס / בנק)
+              </button>
+              <button type="button" className={`seg${gift ? ' on' : ''}`} onClick={() => set({ kind: 'giftcard' })}>
+                🎁 גיפטקארד
+              </button>
+            </div>
+          </div>
+        )}
+
+        {gift && (
+          <label className="field">
+            <span className="label">איפה הגיפטקארד נמצא</span>
+            <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} placeholder="למשל: בארנק, במגירה, באפליקציה" />
+            <span className="hint">גיפטקארד נחשב כבר "התקבל".</span>
+          </label>
+        )}
+
+        {board === 'books' && (
+          <label className="field">
+            <span className="label">סופר/ת (לא חובה)</span>
+            <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} />
+          </label>
+        )}
+
+        {board === 'car' && (
+          <>
+            <label className="field">
+              <span className="label">בתוקף עד</span>
+              <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+            </label>
+            <div className="field-row">
+              <label className="field">
+                <span className="label">חברה / סוכן (לא חובה)</span>
+                <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} />
+              </label>
+              <label className="field">
+                <span className="label">עלות ₪ (לא חובה)</span>
+                <input className="text-input" inputMode="decimal" dir="ltr" value={f.amount} onChange={(e) => set({ amount: e.target.value })} />
+              </label>
+            </div>
+          </>
+        )}
+
+        {board === 'refunds' && (
           <label className="field">
             <span className="label">סכום (₪)</span>
             <input className="text-input" inputMode="decimal" dir="ltr" value={f.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="0" />
@@ -680,7 +940,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
             {f.date >= today() && <span className="hint">תור עתידי נכנס גם ללוח השנה, ומתעדכן שם כשמשנים אותו כאן.</span>}
           </>
         ) : (
-          board !== 'shopping' && board !== 'pills' && (
+          (board === 'packages' || (board === 'refunds' && !gift)) && (
             <label className="field">
               <span className="label">{board === 'packages' ? 'תאריך ההזמנה' : 'מתי ביקשתי'}</span>
               <input type="date" className="date-input" value={f.date} onChange={(e) => set({ date: e.target.value })} />
@@ -688,7 +948,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
           )
         )}
 
-        {meta.statuses && (
+        {meta.statuses && !gift && (
           <div className="field">
             <span className="label">מצב</span>
             <div className="segmented">
@@ -701,7 +961,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
           </div>
         )}
 
-        {board !== 'shopping' && board !== 'pills' && (
+        {board !== 'shopping' && board !== 'pills' && board !== 'books' && (
           <label className="field">
             <span className="label">הערות</span>
             <textarea className="notes" rows={2} value={f.notes} onChange={(e) => set({ notes: e.target.value })} />

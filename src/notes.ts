@@ -16,12 +16,16 @@ export interface BoardMeta {
 export const BOARDS: BoardMeta[] = [
   { id: 'someday', label: 'יום אחד', emoji: '💭', titleLabel: 'מה לעשות' },
   { id: 'shopping', label: 'לקנות', emoji: '🛒', doneTitle: 'נקנו', titleLabel: 'מה לקנות' },
+  { id: 'books', label: 'ספרים', emoji: '📚', doneTitle: 'קראתי', titleLabel: 'שם הספר' },
   { id: 'packages', label: 'חבילות', emoji: '📦', statuses: ['הוזמנה', 'בדרך', 'הגיעה'], doneTitle: 'הגיעו', titleLabel: 'מאיפה הזמנתי' },
   { id: 'refunds', label: 'החזרים', emoji: '💸', statuses: ['ביקשתי', 'אושר', 'התקבל בבנק'], doneTitle: 'התקבלו', titleLabel: 'ממי (חנות / חברה)' },
   { id: 'hair', label: 'שיער', emoji: '💇‍♀️', titleLabel: 'סוג הטיפול' },
   { id: 'lashes', label: 'ריסים', emoji: '👁️', titleLabel: 'סוג הטיפול' },
   { id: 'pills', label: 'גלולות', emoji: '💊', titleLabel: 'חפיסה' },
+  { id: 'car', label: 'רכב', emoji: '🚗', titleLabel: 'מה צריך לחדש' },
 ]
+
+export const CAR_TYPES = ['טסט', 'ביטוח חובה', 'ביטוח מקיף', 'ביטוח צד ג׳', 'רישיון רכב']
 
 export const boardMeta = (b: Board): BoardMeta => BOARDS.find((x) => x.id === b)!
 
@@ -43,12 +47,67 @@ export const TREATMENT_TYPES: Record<TreatmentBoard, string[]> = {
 export interface BookingPrefs {
   intervals: Record<string, number> // כל כמה חודשים
   lead: Record<TreatmentBoard, number> // כמה ימים לפני להזכיר
+  carLead?: number // רכב: כמה ימים לפני פקיעת התוקף להזכיר
+  archive?: Partial<Record<'shopping' | 'someday', number>> // אחרי כמה ימים פריט שסומן יוצא מהרשימה (0 = אף פעם)
 }
 
 export const DEFAULT_BOOKING_PREFS: BookingPrefs = {
   intervals: { 'hair:גוונים': 6, 'hair:פתיחת תלתלים': 4, 'lashes:הרמת ריסים': 3, 'lashes:הרמת גבות': 3 },
   lead: { hair: 14, lashes: 14 },
+  carLead: 30,
+  archive: { shopping: 7, someday: 7 },
 }
+
+export const CAR_LEAD_OPTIONS: [number, string][] = [
+  [7, 'שבוע לפני'],
+  [14, 'שבועיים לפני'],
+  [30, 'חודש לפני'],
+  [60, 'חודשיים לפני'],
+]
+
+export const ARCHIVE_OPTIONS: [number, string][] = [
+  [0, 'אף פעם – נשארים ברשימה'],
+  [1, 'אחרי יום'],
+  [7, 'אחרי שבוע'],
+  [30, 'אחרי חודש'],
+]
+
+export const archiveDays = (prefs: BookingPrefs, b: 'shopping' | 'someday') => prefs.archive?.[b] ?? DEFAULT_BOOKING_PREFS.archive![b]!
+
+/** פריט שסומן לפני יותר מ-days ימים (לפי זמן הסימון) – יוצא מהרשימה */
+export function archived(doneAt: string | null, days: number): boolean {
+  if (!days || !doneAt) return false
+  return Date.now() - new Date(doneAt).getTime() > days * 86_400_000
+}
+
+export interface CarStatus {
+  note: Note
+  expired: boolean
+  due: boolean // בתוך חלון ההתראה (או שפג)
+}
+
+/** מצב כל פריט ברכב עם תאריך תוקף, הקרוב לפקוע ראשון */
+export function carStatus(notes: Note[], prefs: BookingPrefs): CarStatus[] {
+  const t = today()
+  const lead = prefs.carLead ?? DEFAULT_BOOKING_PREFS.carLead!
+  return notesOf(notes, 'car')
+    .filter((n) => n.date)
+    .sort((a, b) => a.date!.localeCompare(b.date!))
+    .map((n) => ({ note: n, expired: n.date! < t, due: t >= addDays(n.date!, -lead) }))
+}
+
+/** "בתוקף עד 12 במרץ · בעוד 3 חודשים" / "פג תוקף לפני 3 ימים" */
+export function expiryLabel(date: string): string {
+  if (date < today()) return `פג תוקף ${agoLabel(date)}`
+  if (date === today()) return 'פג תוקף היום'
+  return `בתוקף עד ${shortDateLabel(date)} · ${agoLabel(date)}`
+}
+
+/** כמה כסף יש בגיפטקארדים שעוד לא נוצלו */
+export const giftcardTotal = (notes: Note[]) =>
+  notesOf(notes, 'refunds')
+    .filter((n) => n.kind === 'giftcard')
+    .reduce((sum, n) => sum + (n.amount ?? 0), 0)
 
 export const LEAD_OPTIONS: [number, string][] = [
   [0, 'ביום עצמו'],
@@ -158,5 +217,5 @@ export const upcomingTreatments = (notes: Note[], board: TreatmentBoard) =>
 /** כמה כסף עוד לא חזר (החזרים שלא התקבלו) */
 export const pendingRefunds = (notes: Note[]) =>
   notesOf(notes, 'refunds')
-    .filter((n) => n.status < 2)
+    .filter((n) => n.status < 2 && !n.kind)
     .reduce((sum, n) => sum + (n.amount ?? 0), 0)

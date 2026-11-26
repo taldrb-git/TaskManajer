@@ -7,7 +7,7 @@ import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import { addDays, diffDays, nextOccurrence, toISODate, today } from './dates'
 import { MAX_CHAIN, pillState, timeline } from './pills'
-import { DEFAULT_BOOKING_PREFS, bookingStatus, prefKey, type BookingPrefs, type TreatmentBoard } from './notes'
+import { DEFAULT_BOOKING_PREFS, bookingStatus, carStatus, prefKey, type BookingPrefs, type TreatmentBoard } from './notes'
 import { supabase } from './supabase'
 import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
 
@@ -26,6 +26,7 @@ interface Persisted {
   prefs?: BookingPrefs // הגדרות תזכורות לקביעת תור (נשמר במכשיר, לא מסונכרן)
   booking?: Record<string, { taskId: string; last: string }> // משימות "לקבוע תור" שנוצרו, לפי "hair:גוונים"
   pillTasks?: Record<string, string> // משימות של ימי מעבר בגלולות: "break:2026-12-06" → מזהה משימה
+  carTasks?: Record<string, { taskId: string; date: string }> // משימות "לחדש טסט" לפי מזהה הפתק
 }
 
 export type SyncStatus = 'local' | 'signed-out' | 'syncing' | 'synced' | 'offline' | 'error'
@@ -68,6 +69,7 @@ function normalizeNote(n: Note): Note {
     date: n.date ?? null,
     time: n.time ?? null,
     task_id: n.task_id ?? null,
+    kind: n.kind ?? '',
     notes: n.notes ?? '',
   }
 }
@@ -419,6 +421,7 @@ export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'boa
     date: fields.date ?? null,
     time: fields.time ?? null,
     task_id: null,
+    kind: fields.kind ?? '',
     notes: fields.notes ?? '',
     created_at: now(),
     updated_at: now(),
@@ -428,6 +431,7 @@ export function addNote(board: NoteBoard, fields: Partial<Omit<Note, 'id' | 'boa
   syncAppointment(n.id)
   syncBookingReminders()
   if (board === 'pills') syncPillTasks()
+  if (board === 'car') syncCarReminders()
   return data.notes[n.id]
 }
 
@@ -438,6 +442,66 @@ export function updateNote(id: string, patch: Partial<Omit<Note, 'id' | 'board' 
   syncAppointment(id)
   syncBookingReminders()
   if (n.board === 'pills') syncPillTasks()
+  if (n.board === 'car') syncCarReminders()
+}
+
+// ---------- הגדרות כלליות של לוחות ----------
+
+function setPrefs(change: (p: BookingPrefs) => void) {
+  const prefs = structuredClone(data.prefs ?? DEFAULT_BOOKING_PREFS)
+  change(prefs)
+  data.prefs = prefs
+  save()
+  emit()
+}
+
+export function setCarLead(days: number) {
+  setPrefs((p) => (p.carLead = days))
+  syncCarReminders()
+}
+
+export function setArchiveDays(board: 'shopping' | 'someday', days: number) {
+  setPrefs((p) => (p.archive = { ...p.archive, [board]: days }))
+}
+
+// ---------- רכב: התראה לפני פקיעת תוקף ----------
+
+/**
+ * כשמתקרב תאריך התוקף (לפי "כמה זמן לפני") – משימה להיום: "לחדש טסט". מתגלגלת עד שמטפלים.
+ * כשמעדכנים תאריך תוקף חדש (חידוש) – המשימה מסומנת כבוצעה. משימה שנמחקה לא חוזרת לאותו תאריך.
+ */
+function syncCarReminders() {
+  const map = { ...(data.carTasks ?? {}) }
+  const alive = Object.values(data.notes).filter((n) => !n.deleted)
+  const seen = new Set<string>()
+  for (const s of carStatus(alive, data.prefs ?? DEFAULT_BOOKING_PREFS)) {
+    const id = s.note.id
+    const rec = map[id]
+    const task = rec ? data.tasks[rec.taskId] : undefined
+    seen.add(id)
+    if (s.due) {
+      if (rec && rec.date === s.note.date) continue
+      if (task && !task.done && !task.deleted) updateTask(task.id, { done: true, done_at: now() })
+      map[id] = { taskId: addTask({ title: `לחדש ${s.note.title}`, due: today() }).id, date: s.note.date! }
+    } else if (rec) {
+      // חודש (תאריך חדש) → בוצע; אחרת (שינוי הגדרה) → נמחק
+      if (task && !task.done && !task.deleted) {
+        if (rec.date !== s.note.date) updateTask(task.id, { done: true, done_at: now() })
+        else deleteTask(task.id)
+      }
+      delete map[id]
+    }
+  }
+  for (const id of Object.keys(map)) {
+    if (seen.has(id)) continue
+    const task = data.tasks[map[id].taskId]
+    if (task && !task.done && !task.deleted) deleteTask(task.id)
+    delete map[id]
+  }
+  if (JSON.stringify(map) !== JSON.stringify(data.carTasks ?? {})) {
+    data.carTasks = map
+    save()
+  }
 }
 
 // ---------- גלולות ----------
@@ -639,6 +703,7 @@ export function rollover() {
   if (changed || dayChanged) emit() // גם בלי שינוי – כדי ש"היום" במסך יתעדכן
   syncBookingReminders() // יום חדש – אולי הגיע הזמן להזכיר לקבוע תור
   syncPillTasks()
+  syncCarReminders()
 }
 
 function scheduleMidnight() {
@@ -658,7 +723,7 @@ const COLUMNS: Record<Table, string[]> = {
     'time', 'remind', 'repeat', 'subtasks', 'created_at', 'updated_at', 'deleted', 'deleted_at',
   ],
   lists: ['id', 'name', 'color', 'created_at', 'updated_at', 'deleted'],
-  notes: ['id', 'board', 'title', 'status', 'amount', 'source', 'tracking', 'date', 'time', 'task_id', 'notes', 'created_at', 'updated_at', 'deleted'],
+  notes: ['id', 'board', 'title', 'status', 'amount', 'source', 'tracking', 'date', 'time', 'task_id', 'kind', 'notes', 'created_at', 'updated_at', 'deleted'],
 }
 
 function pick(row: Record<string, unknown>, table: Table): Row {

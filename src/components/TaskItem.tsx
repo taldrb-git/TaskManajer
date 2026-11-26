@@ -2,6 +2,7 @@ import { useRef, useState, type HTMLAttributes, type TouchEvent } from 'react'
 import { dueLabel, today } from '../dates'
 import { BellIcon, CheckCircleIcon, ListCheckIcon, NoteIcon, PostponeIcon, RepeatIcon, TrashIcon } from '../icons'
 import { REPEAT_LABEL } from '../logic'
+import { updateTask } from '../store'
 import type { Task, TaskList } from '../types'
 
 interface Props {
@@ -31,6 +32,7 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
   const overdue = !task.done && task.due !== null && task.due < today()
   const showDue = task.due !== null && !hideDue && !(hideToday && task.due === today())
   const subDone = task.subtasks.filter((s) => s.done).length
+  const [subsOpen, setSubsOpen] = useState(false)
 
   // ---------- החלקה ----------
   const [dx, setDx] = useState(0)
@@ -117,12 +119,6 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
               </span>
             )}
             {task.remind !== null && task.time && <BellIcon width={13} height={13} className="muted" aria-label="יש תזכורת" />}
-            {task.subtasks.length > 0 && (
-              <span className={`meta-icon${subDone === task.subtasks.length ? ' all-done' : ''}`}>
-                <ListCheckIcon width={13} height={13} />
-                {subDone}/{task.subtasks.length}
-              </span>
-            )}
             {task.postponed > 0 && (
               <span className="postponed">
                 <PostponeIcon width={13} height={13} />
@@ -138,7 +134,34 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
             )}
           </span>
         </button>
+        {task.subtasks.length > 0 && (
+          <button
+            className={`sub-toggle${subDone === task.subtasks.length ? ' all-done' : ''}${subsOpen ? ' open' : ''}`}
+            onClick={() => setSubsOpen(!subsOpen)}
+            aria-expanded={subsOpen}
+            aria-label={`תת-משימות: ${subDone} מתוך ${task.subtasks.length}`}
+          >
+            <ListCheckIcon width={14} height={14} />
+            {subDone}/{task.subtasks.length}
+          </button>
+        )}
       </div>
+      {subsOpen && task.subtasks.length > 0 && (
+        <ul className="row-subs">
+          {task.subtasks.map((s) => (
+            <li key={s.id} className={s.done ? 'done' : ''}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={s.done}
+                  onChange={() => updateTask(task.id, { subtasks: task.subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)) })}
+                />
+                <span>{s.title}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   )
 }
