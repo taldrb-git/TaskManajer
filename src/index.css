@@ -595,3 +595,4 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .note.compact .check { width: 20px; height: 20px; }
 .inline-meta { color: var(--muted); font-size: 14px; }
 .note.compact.is-done .inline-meta { text-decoration: none; }
+.dup-warn { margin-top: -8px; font-size: 14px; color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 10px; padding: 8px 12px; }

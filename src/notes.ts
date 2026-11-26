@@ -36,6 +36,21 @@ export function orderedBoards(order: Board[] | undefined): BoardMeta[] {
 }
 const isBoardId = (s: string): s is Board => BOARDS.some((b) => b.id === s)
 
+/** השוואת שמות בלי רווחים כפולים, גרשיים וסימני פיסוק: "הארי  פוטר!" = "הארי פוטר" */
+export const normTitle = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/["'״׳`.,!?:;()\-–]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** ספר אחר עם אותו שם שכבר ברשימה (כדי להתריע על כפילות) */
+export function duplicateBook(notes: Note[], title: string, selfId?: string): Note | undefined {
+  const t = normTitle(title)
+  if (!t) return undefined
+  return notesOf(notes, 'books').find((n) => n.id !== selfId && normTitle(n.title) === t)
+}
+
 /** כל הסופרים שכבר נרשמו בספרים, לפי שכיחות */
 export function knownAuthors(notes: Note[]): string[] {
   const count = new Map<string, number>()

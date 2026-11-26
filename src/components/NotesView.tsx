@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { addMonths, fullDateLabel, today } from '../dates'
 import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, SettingsIcon, TrashIcon } from '../icons'
-import { knownAuthors, orderedBoards, ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
+import { duplicateBook, knownAuthors, orderedBoards, ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
 import { setBoardOrder, addNote, connectPack, deleteNote, disconnectPack, setArchiveDays, setBookingInterval, setBookingLead, setCarLead, updateNote } from '../store'
 import { BREAK_DAYS, MAX_CHAIN, PILL_DAYS, packStarts, pillState, timeline, upcomingBreaks } from '../pills'
 import type { Board, Note, NoteBoard, Task } from '../types'
@@ -891,6 +891,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
 
   const types = isTreatment(board) ? treatmentTypes(notes, board) : board === 'car' ? CAR_TYPES : []
   const gift = board === 'refunds' && f.kind === 'giftcard'
+  const dup = board === 'books' ? duplicateBook(notes, f.title, note?.id) : undefined
 
   return (
     <Sheet
@@ -936,6 +937,13 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
             placeholder={board === 'packages' ? 'למשל: עלי אקספרס, שיין, אמזון' : undefined}
           />
         </label>
+        )}
+
+        {dup && (
+          <span className="dup-warn" role="alert">
+            ⚠️ הספר הזה כבר ברשימה{dup.status >= 2 ? ' – וכבר סימנת שקראת אותו' : ''}
+            {dup.source && ` (${dup.source})`}
+          </span>
         )}
 
         {types.length > 0 && (
