@@ -2,7 +2,7 @@ import { useRef, useState, type HTMLAttributes, type TouchEvent } from 'react'
 import { dueLabel, today } from '../dates'
 import { BellIcon, CheckCircleIcon, ListCheckIcon, NoteIcon, PostponeIcon, RepeatIcon, TrashIcon } from '../icons'
 import { REPEAT_LABEL } from '../logic'
-import { updateTask } from '../store'
+import { toggleSubtask } from '../store'
 import type { Task, TaskList } from '../types'
 
 interface Props {
@@ -154,7 +154,7 @@ export function TaskItem({ task, list, showList, hideToday, hideDue, onToggle, o
                 <input
                   type="checkbox"
                   checked={s.done}
-                  onChange={() => updateTask(task.id, { subtasks: task.subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)) })}
+                  onChange={() => toggleSubtask(task.id, s.id, onToggle)}
                 />
                 <span>{s.title}</span>
               </label>

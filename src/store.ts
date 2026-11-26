@@ -289,6 +289,21 @@ export function toggleTask(id: string): () => void {
   }
 }
 
+/**
+ * סימון / ביטול סימון של תת-משימה.
+ * כשכל תת-המשימות סומנו – המשימה עצמה מסומנת כבוצעה (דרך complete, כדי שהמסך יוכל להציג הודעה עם ביטול).
+ * כשמבטלים סימון של תת-משימה במשימה שכבר בוצעה – המשימה חוזרת להיות פתוחה (לא במשימה חוזרת, שכבר יצרה את הבאה).
+ */
+export function toggleSubtask(taskId: string, subId: string, complete: (t: Task) => void = (t) => void toggleTask(t.id)) {
+  const t = data.tasks[taskId]
+  if (!t) return
+  const subtasks = t.subtasks.map((s) => (s.id === subId ? { ...s, done: !s.done } : s))
+  updateTask(taskId, { subtasks })
+  const all = subtasks.length > 0 && subtasks.every((s) => s.done)
+  if (all && !t.done) complete(data.tasks[taskId])
+  else if (!all && t.done && !t.repeat) updateTask(taskId, { done: false, done_at: null })
+}
+
 /** דחייה ידנית (החלקה): מעבירה את המשימה ביום אחד קדימה ומוסיפה יום למונה הדחיות. מחזיר ביטול */
 export function postponeTask(id: string): () => void {
   const t = data.tasks[id]

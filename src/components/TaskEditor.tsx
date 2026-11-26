@@ -3,7 +3,7 @@ import { addDays, diffDays, dueLabel, fullDateLabel, today } from '../dates'
 import { CopyIcon, TrashIcon, XIcon } from '../icons'
 import { PRIORITY_LABEL, REMIND_OPTIONS, REPEAT_LABEL } from '../logic'
 import { notificationPermission, requestNotifications } from '../reminders'
-import { addList, deleteTask, duplicateTask, toggleTask, uid, updateTask, useStore } from '../store'
+import { addList, deleteTask, duplicateTask, toggleSubtask, toggleTask, uid, updateTask, useStore } from '../store'
 import type { Priority, Repeat, Task } from '../types'
 import { Sheet } from './Sheet'
 import { doneAfterLabel, postponedLabel } from './TaskItem'
@@ -284,7 +284,7 @@ function Subtasks({ task }: { task: Task }) {
                 type="checkbox"
                 checked={s.done}
                 aria-label={s.title}
-                onChange={() => set(task.subtasks.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
+                onChange={() => toggleSubtask(task.id, s.id)}
               />
               <input
                 className="sub-title"
