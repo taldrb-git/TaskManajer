@@ -589,3 +589,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .book-due.expired { border-color: color-mix(in srgb, var(--danger) 55%, transparent); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
 .book-due.expired .next-label { color: var(--danger); }
 .board-summary { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+
+/* ספרים: רשימה צפופה, הסופר/ת באותה שורה */
+.note.compact .note-body { padding: 8px 0; }
+.note.compact .check { width: 20px; height: 20px; }
+.inline-meta { color: var(--muted); font-size: 14px; }
+.note.compact.is-done .inline-meta { text-decoration: none; }

@@ -291,7 +291,8 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
   const checkable = note.board === 'shopping' || note.board === 'books'
   const details: ReactNode[] = []
   if ((note.board === 'refunds' || note.board === 'car') && note.amount !== null) details.push(<b key="a">{formatMoney(note.amount)}</b>)
-  if (note.source) details.push(<span key="s">{gift ? `📍 ${note.source}` : note.source}</span>)
+  const compact = note.board === 'books' // רשימה צפופה: הסופר/ת באותה שורה עם שם הספר
+  if (note.source && !compact) details.push(<span key="s">{gift ? `📍 ${note.source}` : note.source}</span>)
   if (note.date && note.board === 'car') {
     const soon = note.date >= today() && note.date <= addMonths(today(), 1)
     details.push(
@@ -317,7 +318,7 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
   if (note.notes) details.push(<span key="n">{note.notes}</span>)
 
   return (
-    <li className={`note${isDone ? ' is-done' : ''}${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
+    <li className={`note${isDone ? ' is-done' : ''}${compact ? ' compact' : ''}${swipe.swiping ? ' swiping' : ''}`} {...swipe.handlers}>
       {swipe.bg}
       <div className="note-row" style={swipe.rowStyle}>
       {checkable && (
@@ -334,7 +335,10 @@ function NoteRow({ note, onEdit, onDelete, toast }: { note: Note; onEdit: (n: No
         </button>
       )}
       <button className="note-body" onClick={() => onEdit(note)}>
-        <span className="note-title">{note.title}</span>
+        <span className="note-title">
+          {note.title}
+          {compact && note.source && <span className="inline-meta"> · {note.source}</span>}
+        </span>
         {details.length > 0 && <span className="note-meta">{details}</span>}
       </button>
       {note.tracking && (
