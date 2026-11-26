@@ -29,6 +29,23 @@ export const CAR_TYPES = ['טסט', 'ביטוח חובה', 'ביטוח מקיף'
 
 export const boardMeta = (b: Board): BoardMeta => BOARDS.find((x) => x.id === b)!
 
+/** הלוחות לפי הסדר שנבחר בגרירה. לוח חדש (שעוד לא בסדר השמור) נכנס בסוף */
+export function orderedBoards(order: Board[] | undefined): BoardMeta[] {
+  const known = (order ?? []).filter(isBoardId)
+  return [...known.map(boardMeta), ...BOARDS.filter((b) => !known.includes(b.id))]
+}
+const isBoardId = (s: string): s is Board => BOARDS.some((b) => b.id === s)
+
+/** כל הסופרים שכבר נרשמו בספרים, לפי שכיחות */
+export function knownAuthors(notes: Note[]): string[] {
+  const count = new Map<string, number>()
+  for (const n of notesOf(notes, 'books')) {
+    const a = n.source.trim()
+    if (a) count.set(a, (count.get(a) ?? 0) + 1)
+  }
+  return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'he')).map(([a]) => a)
+}
+
 export const isBoard = (s: string): s is Board => BOARDS.some((b) => b.id === s)
 
 /** לוחות של תורים (טיפולים) – "מתי היה התור האחרון" */
@@ -49,6 +66,7 @@ export interface BookingPrefs {
   lead: Record<TreatmentBoard, number> // כמה ימים לפני להזכיר
   carLead?: number // רכב: כמה ימים לפני פקיעת התוקף להזכיר
   archive?: Partial<Record<'shopping' | 'someday', number>> // אחרי כמה ימים פריט שסומן יוצא מהרשימה (0 = אף פעם)
+  boardOrder?: Board[] // סדר הלוחות במסך "פתקים" (נקבע בגרירה)
 }
 
 export const DEFAULT_BOOKING_PREFS: BookingPrefs = {

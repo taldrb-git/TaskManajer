@@ -1,8 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { addMonths, fullDateLabel, today } from '../dates'
 import { BellIcon, CalendarIcon, ChevronIcon, CopyIcon, SettingsIcon, TrashIcon } from '../icons'
-import { ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, BOARDS, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
-import { addNote, connectPack, deleteNote, disconnectPack, setArchiveDays, setBookingInterval, setBookingLead, setCarLead, updateNote } from '../store'
+import { knownAuthors, orderedBoards, ARCHIVE_OPTIONS, CAR_LEAD_OPTIONS, CAR_TYPES, archiveDays, archived, carStatus, expiryLabel, giftcardTotal, LEAD_OPTIONS, agoLabel, bookingStatus, everyMonthsLabel, prefKey, treatmentTypes, type BookingPrefs, boardMeta, formatMoney, isTreatment, lastTreatment, notesOf, pendingRefunds, shortDateLabel, upcomingTreatments, waitingLabel, type TreatmentBoard } from '../notes'
+import { setBoardOrder, addNote, connectPack, deleteNote, disconnectPack, setArchiveDays, setBookingInterval, setBookingLead, setCarLead, updateNote } from '../store'
 import { BREAK_DAYS, MAX_CHAIN, PILL_DAYS, packStarts, pillState, timeline, upcomingBreaks } from '../pills'
 import type { Board, Note, NoteBoard, Task } from '../types'
 import { Sheet } from './Sheet'
@@ -56,19 +56,68 @@ export function NotesHome({ tasks, notes, prefs, onOpen }: { tasks: Task[]; note
     return `${recent.title} · ${agoLabel(recent.date)}`
   }
 
+  // ---------- שינוי סדר בגרירה (מהידית בצד) ----------
+  const saved = orderedBoards(prefs.boardOrder).map((b) => b.id)
+  const [drag, setDrag] = useState<{ id: Board; order: Board[] } | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const order = drag?.order ?? saved
+
+  const onGripDown = (e: ReactPointerEvent, id: Board) => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    navigator.vibrate?.(10)
+    setDrag({ id, order: saved })
+  }
+  const onGripMove = (e: ReactPointerEvent) => {
+    if (!drag || !listRef.current) return
+    // הכרטיס שמתחת לאצבע (לפי הגובה) – הלוח הנגרר עובר למקומו
+    const cards = [...listRef.current.querySelectorAll<HTMLElement>('[data-board]')]
+    const over = cards.find((c) => {
+      const r = c.getBoundingClientRect()
+      return e.clientY >= r.top && e.clientY <= r.bottom
+    })
+    const target = over?.dataset.board as Board | undefined
+    if (!target || target === drag.id) return
+    const next = drag.order.filter((x) => x !== drag.id)
+    next.splice(drag.order.indexOf(target), 0, drag.id)
+    setDrag({ ...drag, order: next })
+  }
+  const onGripUp = () => {
+    if (drag) setBoardOrder(drag.order)
+    setDrag(null)
+  }
+
   return (
-    <div className="boards">
-      {BOARDS.map((b) => (
-        <button key={b.id} className="board-card" onClick={() => onOpen(b.id)}>
-          <span className="board-emoji" aria-hidden="true">
-            {b.emoji}
-          </span>
-          <span className="board-text">
-            <b>{b.label}</b>
-            <BoardSummary value={summary(b.id)} />
-          </span>
-          <ChevronIcon width={18} height={18} className="flip muted" />
-        </button>
+    <div className={`boards${drag ? ' reordering' : ''}`} ref={listRef}>
+      {order.map(boardMeta).map((b) => (
+        <div key={b.id} data-board={b.id} className={`board-card${drag?.id === b.id ? ' lifted' : ''}`}>
+          <button className="board-open" onClick={() => onOpen(b.id)}>
+            <span className="board-emoji" aria-hidden="true">
+              {b.emoji}
+            </span>
+            <span className="board-text">
+              <b>{b.label}</b>
+              <BoardSummary value={summary(b.id)} />
+            </span>
+          </button>
+          <button
+            className="board-grip"
+            aria-label={`גרירה לשינוי המיקום של ${b.label}`}
+            onPointerDown={(e) => onGripDown(e, b.id)}
+            onPointerMove={onGripMove}
+            onPointerUp={onGripUp}
+            onPointerCancel={onGripUp}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="9" cy="6" r="1.6" />
+              <circle cx="15" cy="6" r="1.6" />
+              <circle cx="9" cy="12" r="1.6" />
+              <circle cx="15" cy="12" r="1.6" />
+              <circle cx="9" cy="18" r="1.6" />
+              <circle cx="15" cy="18" r="1.6" />
+            </svg>
+          </button>
+        </div>
       ))}
     </div>
   )
@@ -648,6 +697,44 @@ function PillRow({ seg, note, onEdit, onDelete }: { seg: { start: string; end: s
   )
 }
 
+// ---------- סופרים: הצעות מתוך מה שכבר נרשם ----------
+
+function AuthorField({ value, authors, onChange }: { value: string; authors: string[]; onChange: (v: string) => void }) {
+  const [focused, setFocused] = useState(false)
+  const q = value.trim()
+  const matches = q ? authors.filter((a) => a.includes(q) && a !== q).slice(0, 6) : []
+  return (
+    <label className="field">
+      <span className="label">סופר/ת (לא חובה)</span>
+      <input
+        className="text-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        autoComplete="off"
+      />
+      {focused && matches.length > 0 && (
+        <span className="chips suggest" role="listbox" aria-label="סופרים שכבר רשמת">
+          {matches.map((a) => (
+            <button
+              type="button"
+              key={a}
+              role="option"
+              aria-selected={false}
+              className="chip"
+              onPointerDown={(e) => e.preventDefault()} // שהשדה לא יאבד פוקוס לפני הבחירה
+              onClick={() => onChange(a)}
+            >
+              {a}
+            </button>
+          ))}
+        </span>
+      )}
+    </label>
+  )
+}
+
 // ---------- הגדרות תזכורות ללוח תורים ----------
 
 function BookingSettings({ board, notes, prefs, onClose }: { board: TreatmentBoard; notes: Note[]; prefs: BookingPrefs; onClose: () => void }) {
@@ -892,12 +979,7 @@ export function NoteEditor({ board, note, preset, notes, onClose, onDeleted }: E
           </label>
         )}
 
-        {board === 'books' && (
-          <label className="field">
-            <span className="label">סופר/ת (לא חובה)</span>
-            <input className="text-input" value={f.source} onChange={(e) => set({ source: e.target.value })} />
-          </label>
-        )}
+        {board === 'books' && <AuthorField value={f.source} authors={knownAuthors(notes)} onChange={(v) => set({ source: v })} />}
 
         {board === 'car' && (
           <>

@@ -9,7 +9,7 @@ import { addDays, diffDays, nextOccurrence, toISODate, today } from './dates'
 import { MAX_CHAIN, pillState, timeline } from './pills'
 import { DEFAULT_BOOKING_PREFS, bookingStatus, carStatus, prefKey, type BookingPrefs, type TreatmentBoard } from './notes'
 import { supabase } from './supabase'
-import type { Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
+import type { Board, Note, NoteBoard, Priority, Repeat, Task, TaskList } from './types'
 
 type Table = 'tasks' | 'lists' | 'notes'
 type Row = Task | TaskList | Note
@@ -473,6 +473,10 @@ function setPrefs(change: (p: BookingPrefs) => void) {
 export function setCarLead(days: number) {
   setPrefs((p) => (p.carLead = days))
   syncCarReminders()
+}
+
+export function setBoardOrder(order: Board[]) {
+  setPrefs((p) => (p.boardOrder = order))
 }
 
 export function setArchiveDays(board: 'shopping' | 'someday', days: number) {

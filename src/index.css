@@ -458,9 +458,18 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 /* ===== פתקים ===== */
 .boards { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
 .board-card {
-  display: flex; align-items: center; gap: 14px; padding: 14px 16px; text-align: start;
+  display: flex; align-items: center; gap: 4px; padding: 0; text-align: start;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  transition: transform .15s, box-shadow .15s;
 }
+.board-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; padding: 14px 16px; text-align: start; }
+/* ידית גרירה: touch-action none כדי שהגרירה לא תגלול את הדף */
+.board-grip { align-self: stretch; padding: 0 14px 0 12px; color: var(--muted); opacity: .55; touch-action: none; cursor: grab; display: grid; place-items: center; }
+.board-card.lifted { transform: scale(1.02); box-shadow: var(--shadow); border-color: var(--accent); position: relative; z-index: 2; }
+.board-card.lifted .board-grip { opacity: 1; color: var(--accent); cursor: grabbing; }
+.boards.reordering { user-select: none; -webkit-user-select: none; }
+.chips.suggest { margin-top: -2px; }
+.chips.suggest .chip { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 @media (hover: hover) { .board-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); } }
 .board-emoji { font-size: 26px; width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; flex-shrink: 0; }
 .board-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
