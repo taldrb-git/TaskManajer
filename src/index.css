@@ -68,7 +68,7 @@ h1, h2, h3 { margin: 0; }
 .icon-btn {
   width: 40px; height: 40px; border-radius: 10px; display: inline-grid; place-items: center; color: var(--muted); flex-shrink: 0;
 }
-.icon-btn:hover { background: var(--bg-soft); color: var(--text); }
+@media (hover: hover) { .icon-btn:hover { background: var(--bg-soft); color: var(--text); } } /* רק במכשיר עם עכבר – בטלפון :hover "נתקע" על מה שמתחת לאצבע */
 .mobile-only { display: none; }
 
 /* ===== ניווט ===== */
@@ -78,7 +78,7 @@ h1, h2, h3 { margin: 0; }
 .nav-item {
   display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 9px; text-align: start; width: 100%; color: var(--text);
 }
-.nav-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+@media (hover: hover) { .nav-item:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
 .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .nav-item.add { color: var(--muted); }
 .nav-icon { display: inline-grid; place-items: center; width: 22px; color: inherit; }
@@ -90,7 +90,7 @@ h1, h2, h3 { margin: 0; }
 .dot.big { width: 14px; height: 14px; flex-shrink: 0; }
 .nav-foot { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 4px; }
 .sync-badge { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 6px 10px; border-radius: 8px; text-align: start; }
-.sync-badge:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+@media (hover: hover) { .sync-badge:hover { background: color-mix(in srgb, var(--text) 6%, transparent); } }
 .s-synced { color: var(--ok); }
 .s-error { color: var(--danger); }
 .s-offline { color: var(--warn); }
@@ -153,7 +153,7 @@ h1, h2, h3 { margin: 0; }
 .check.p2 { --c: var(--p2); }
 .check.p3 { --c: var(--p3); }
 .check.p1, .check.p2, .check.p3 { background: color-mix(in srgb, var(--c) 12%, transparent); }
-.check:hover { color: var(--c); }
+@media (hover: hover) { .check:hover { color: var(--c); } }
 .check[aria-checked='true'] { background: var(--c); color: var(--bg); }
 .check.big { width: 26px; height: 26px; margin-top: 4px; }
 
@@ -171,10 +171,10 @@ h1, h2, h3 { margin: 0; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--surface); font-weight: 550; white-space: nowrap;
 }
-.btn:hover { background: var(--bg-soft); }
+@media (hover: hover) { .btn:hover { background: var(--bg-soft); } }
 .btn:disabled { opacity: .6; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn.primary:hover { filter: brightness(1.08); }
+@media (hover: hover) { .btn.primary:hover { filter: brightness(1.08); } }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.danger { color: var(--danger); }
 .btn.link { border: 0; background: none; color: var(--accent); padding-inline: 4px; }
@@ -239,7 +239,7 @@ h1, h2, h3 { margin: 0; }
   border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column;
 }
 .menu > button { text-align: start; padding: 9px 12px; border-radius: 8px; }
-.menu > button:hover { background: var(--bg-soft); }
+@media (hover: hover) { .menu > button:hover { background: var(--bg-soft); } }
 .menu > button.danger { color: var(--danger); }
 .menu-colors { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 .menu-colors button { width: 22px; height: 22px; border-radius: 50%; }
@@ -259,7 +259,7 @@ h1, h2, h3 { margin: 0; }
   width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
   display: grid; place-items: center; box-shadow: 0 6px 20px rgb(0 0 0 / .45); transition: transform .12s, filter .12s;
 }
-.fab:hover { filter: brightness(1.08); }
+@media (hover: hover) { .fab:hover { filter: brightness(1.08); } }
 .fab:active { transform: scale(.94); }
 
 .composer-backdrop { position: fixed; inset: 0; z-index: 45; background: rgb(0 0 0 / .45); animation: fade .15s; display: flex; align-items: flex-end; justify-content: center; }
@@ -321,10 +321,10 @@ h1, h2, h3 { margin: 0; }
 @keyframes cal-in { from { opacity: 0; transform: translateY(-6px); } }
 .cal-handle { display: flex; justify-content: center; width: 100%; padding: 8px 0 2px; }
 .cal-handle span { width: 40px; height: 4px; border-radius: 2px; background: var(--border); transition: background .12s; }
-.cal-handle:hover span { background: var(--muted); }
+@media (hover: hover) { .cal-handle:hover span { background: var(--muted); } }
 .cal-weekday { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0 6px; font-weight: 600; }
 .cal-day { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0 6px; border-radius: 12px; }
-.cal-day:hover .cal-num { background: var(--bg-soft); }
+@media (hover: hover) { .cal-day:hover .cal-num { background: var(--bg-soft); } }
 .cal-num {
   width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
   font-size: 15px; font-variant-numeric: tabular-nums; transition: background .12s;
@@ -383,7 +383,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 /* ===== הקלטה קולית ===== */
 .mic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); position: relative; }
-.mic:hover { color: var(--text); background: var(--bg-soft); }
+@media (hover: hover) { .mic:hover { color: var(--text); background: var(--bg-soft); } }
 .mic.on { color: var(--on-accent); background: var(--accent); }
 .mic.on::before {
   content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--accent);
@@ -461,7 +461,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
   display: flex; align-items: center; gap: 14px; padding: 14px 16px; text-align: start;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
 }
-.board-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+@media (hover: hover) { .board-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); } }
 .board-emoji { font-size: 26px; width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; flex-shrink: 0; }
 .board-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .board-text b { font-size: 16px; font-weight: 650; }
